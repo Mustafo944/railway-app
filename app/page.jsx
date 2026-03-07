@@ -22,17 +22,17 @@ const ISH_TURLARI = ["Relslarni ko'rikdan o'tkazish", "Svetofor qurilmalarini so
 
 export default function App() {
   const [view, setView] = useState('loading');
-  const [currentWorker, setCurrentWorker] = useState<any>(null);
+  const [currentWorker, setCurrentWorker] = useState(null);
   const [loginId, setLoginId] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
   const [selectedStation, setSelectedStation] = useState('');
- const [activeTasks, setActiveTasks] = useState<any[]>([]);
- const [archive, setArchive] = useState<any[]>([]);
- const [allTasksForBoss, setAllTasksForBoss] = useState<any[]>([]);
+  const [activeTasks, setActiveTasks] = useState([]);
+  const [archive, setArchive] = useState([]);
+  const [allTasksForBoss, setAllTasksForBoss] = useState([]);
   const [showTaskMenu, setShowTaskMenu] = useState(false);
- const [workersList, setWorkersList] = useState<any[]>([]);
+  const [workersList, setWorkersList] = useState([]);
   const [newWorkerId, setNewWorkerId] = useState('');
   const [newWorkerPass, setNewWorkerPass] = useState('');
   const [newWorkerName, setNewWorkerName] = useState('');
@@ -49,7 +49,7 @@ export default function App() {
     if (data) setAllTasksForBoss(data);
   }, []);
 
-  const loadStationData = useCallback(async (station:string) => {
+  const loadStationData = useCallback(async (station) => {
     const { data } = await supabase.from('tasks').select('*').eq('station', station).order('created_at', { ascending: false });
     if (data) {
       setActiveTasks(data.filter(t => t.status === 'pending'));
@@ -82,8 +82,8 @@ export default function App() {
     }
   }, [loadWorkers, loadAllTasks, loadStationData]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleLogin = async (e) => {
+    e.preventDefault();
     const id = loginId.trim();
     const pass = loginPass.trim();
     let userObj = null;
@@ -116,7 +116,7 @@ export default function App() {
     }
   };
 
-  const handleAddTask = async (ishNomi: string) => {
+  const handleAddTask = async (ishNomi) => {
     if (!currentWorker || !selectedStation) return;
     const newTask = { 
       worker_id: currentWorker.full_name, 
@@ -133,7 +133,7 @@ export default function App() {
     }
   };
 
-  const finishTask = async (taskId: number) => {
+  const finishTask = async (taskId) => {
     const { error } = await supabase.from('tasks').update({ 
       status: 'completed', 
       end_time: new Date().toISOString() 
@@ -162,7 +162,7 @@ export default function App() {
     }
   };
 
-  const removeWorker = async (id:string) => {
+  const removeWorker = async (id) => {
     const { error } = await supabase.from('allowed_emails').delete().eq('id', id);
     if (!error) {
       loadWorkers();
@@ -170,7 +170,7 @@ export default function App() {
     }
   };
 
-  const formatFullDateTime = (isoString: string) => {
+  const formatFullDateTime = (isoString) => {
     if (!isoString) return "--:--";
     return new Date(isoString).toLocaleString('uz-UZ', { 
       day: '2-digit', month: '2-digit', year: 'numeric', 
@@ -239,7 +239,7 @@ export default function App() {
                   required 
                   className="w-full p-4 border-2 rounded-2xl outline-none focus:border-blue-900 bg-slate-50 font-bold cursor-text" 
                   value={loginId} 
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLoginId(e.target.value)}
+                  onChange={(e) => setLoginId(e.target.value)}
                 />
                 <div className="relative">
                   <input 
@@ -248,7 +248,7 @@ export default function App() {
                     required 
                     className="w-full p-4 border-2 rounded-2xl outline-none focus:border-blue-900 bg-slate-50 font-bold cursor-text" 
                     value={loginPass} 
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLoginPass(e.target.value)}
+                    onChange={(e) => setLoginPass(e.target.value)}
                   />
                   <button 
                     type="button" 
@@ -444,14 +444,14 @@ export default function App() {
                   placeholder="ID raqami" 
                   className="p-4 border-2 rounded-2xl outline-none focus:border-orange-500 font-bold bg-slate-50 text-sm cursor-text" 
                   value={newWorkerId} 
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewWorkerId(e.target.value)}
+                  onChange={(e) => setNewWorkerId(e.target.value)}
                 />
                 <input 
                   type="text"
                   placeholder="Parol" 
                   className="p-4 border-2 rounded-2xl outline-none focus:border-orange-500 font-bold bg-slate-50 text-sm cursor-text" 
                   value={newWorkerPass} 
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewWorkerPass(e.target.value)}
+                  onChange={(e) => setNewWorkerPass(e.target.value)}
                 />
                 <button 
                   onClick={addWorker} 
@@ -466,7 +466,7 @@ export default function App() {
                     <tr><th className="p-6">Ism Familiya</th><th className="p-6">ID raqami</th><th className="p-6 text-right">Amal</th></tr>
                   </thead>
                   <tbody className="divide-y-2 divide-orange-50 font-bold text-xs uppercase">
-                    {workersList.map((w:any) => (
+                    {workersList.map((w) => (
                       <tr key={w.id} className="hover:bg-white transition-colors">
                         <td className="p-6">{w.full_name}</td>
                         <td className="p-6 font-mono text-orange-700">{w.worker_id}</td>
