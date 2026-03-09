@@ -1,10 +1,13 @@
 "use client"
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { toast, Toaster } from 'react-hot-toast';
+import { YILLIK_REJA } from './yillik_reja';
+import { TORT_HAFTALIK_REJA } from './tort_haftalik_reja';
 import { 
   MapPin, Plus, History, User, CheckCircle, ArrowLeft, 
-  ShieldCheck, Trash2, X, Loader2, Eye, EyeOff, Clock, Edit3, Save 
+  ShieldCheck, Trash2, X, Loader2, Eye, EyeOff, Clock, Edit3, Save,
+  BarChart, AlertTriangle
 } from 'lucide-react';
 
 const supabaseUrl = 'https://bcyrxgxcwngnlvmpklsf.supabase.co';
@@ -12,9 +15,6 @@ const supabaseAnonKey = 'sb_publishable_5RG2Pfx51e1Rifkk8LBGJg_p85XYwvH';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const BEKATLAR = ["Malikobod", "Qizil tepa", "Elobod", "To’dako’l", "Azizobod", "Farovon", "Buxoro-1", "METS", "Poykent", "Murg’ak", "Yakkatut", "Blokpost", "Qorako’l", "Olot", "Xo’jadavlat", "Yangiobod", "Navbahor", "Yaxshilik", "Parvoz", "Qorli tog’", "Kiyikli", "Xizrbobo", "Jayhun", "Davtepa", "Turon", "Kogon", "Qorovul bozor", "PPS"];
-
-const ISH_TURLARI = ["Relslarni ko'rikdan o'tkazish", "Svetofor qurilmalarini sozlash", "Akkumulyator batareyalarini tekshirish", "Aloqa liniyalarini profilaktika qilish", "Strelkali o'tkazgichlarni moylash", "Transformator podstansiyasini ko'zdan kechirish"];
-
 export default function App() {
   const [view, setView] = useState('loading');
   const [currentWorker, setCurrentWorker] = useState(null);
@@ -33,14 +33,23 @@ export default function App() {
   const [newWorkerName, setNewWorkerName] = useState('');
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-const [showFaultModal, setShowFaultModal] = useState(false);
-const [faultReason, setFaultReason] = useState("");
-const [customFaultReason, setCustomFaultReason] = useState("");
-const [activeFault, setActiveFault] = useState(null);
+  const [confirmFaultSend, setConfirmFaultSend] = useState(false);
+  const [faultHistory, setFaultHistory] = useState([]);
+  const [showFaultStats, setShowFaultStats] = useState(false);
+  const [showFaultModal, setShowFaultModal] = useState(false);
+  const [faultReason, setFaultReason] = useState("");
+  const [customFaultReason, setCustomFaultReason] = useState("");
+  const [activeFault, setActiveFault] = useState(null);
   const [editingWorker, setEditingWorker] = useState(null);
   const [editName, setEditName] = useState('');
   const [editPass, setEditPass] = useState('');
-const [showBigAlert, setShowBigAlert] = useState(false); // Katta oynani ko'rsatish uchun
+  const [showBigAlert, setShowBigAlert] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [taskMenuStep, setTaskMenuStep] = useState('main'); // 'main' | 'bolimlar' | 'ishlar' | 'oy'
+const [selectedBolim, setSelectedBolim] = useState(null);
+  const [faultTimer, setFaultTimer] = useState("0 min 0 s");
+const [selectedReja, setSelectedReja] = useState('yillik');
+const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const loadWorkers = useCallback(async () => {
     const { data } = await supabase.from('allowed_emails').select('*').order('role', { ascending: true });
     if (data) setWorkersList(data);
@@ -51,91 +60,137 @@ const [showBigAlert, setShowBigAlert] = useState(false); // Katta oynani ko'rsat
     if (data) setAllTasksForBoss(data);
   }, []);
 
-  const loadStationData = useCallback(async (station) => {
-    const { data } = await supabase.from('tasks').select('*').eq('station', station).order('created_at', { ascending: false });
-    if (data) {
-      setActiveTasks(data.filter(t => t.status === 'pending'));
-      setArchive(data.filter(t => t.status === 'completed'));
-    }
-  }, []);
+const loadStationData = useCallback(async (station) => {
+  setIsLoadingTasks(true);
+  const { data } = await supabase.from('tasks').select('*').eq('station', station).order('created_at', { ascending: false });
+  if (data) {
+    const today = new Date().toISOString().slice(0, 10);
+    setActiveTasks(data.filter(t => t.status === 'pending' && t.start_time?.slice(0, 10) === today));
+    setArchive(data.filter(t => t.status === 'completed'));
+  }
+  setIsLoadingTasks(false);
+}, []);
+  const loadFaultStats = async () => {
+    const { data } = await supabase
+      .from("faults")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setFaultHistory(data);
+  };
+
+  const tasksByStation = useMemo(() => {
+    const map = {};
+    allTasksForBoss.forEach(task => {
+      if (!map[task.station]) {
+        map[task.station] = [];
+      }
+      map[task.station].push(task);
+    });
+    return map;
+  }, [allTasksForBoss]);
+
+  // Taymer funksiyasi
+  const getFaultTimer = (start) => {
+    if (!start) return "0 min 0 s";
+    const diff = Date.now() - new Date(start).getTime();
+    const m = Math.floor(diff / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return `${m} min ${s} s`;
+  };
+
+  // Taymerni yangilash
+  useEffect(() => {
+    if (!activeFault?.created_at) return;
+    
+    const interval = setInterval(() => {
+      setFaultTimer(getFaultTimer(activeFault.created_at));
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [activeFault]);
 
   // REALTIME OBUNA QISMI
-// REALTIME OBUNA QISMI
-useEffect(() => {
+  useEffect(() => {
+    const channel = supabase
+      .channel('tasks-live')
+      // YANGI TASK
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'tasks' },
+        (payload) => {
+          const newTask = payload.new;
+          setAllTasksForBoss(prev => {
+            if (prev.some(t => t.id === newTask.id)) return prev;
+            return [newTask, ...prev];
+          });
 
-  const channel = supabase
-    .channel('tasks-live')
-
-    // YANGI TASK
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'tasks' },
-      (payload) => {
-
-        const newTask = payload.new
-
-        setAllTasksForBoss(prev => [newTask, ...prev])
-
-        if (newTask.station === selectedStation) {
-          setActiveTasks(prev => [newTask, ...prev])
-        }
-
-        if (currentWorker?.role === 'boss') {
-          toast.success("Yangi ish qo'shildi")
-        }
-
-      }
-    )
-
-    // TASK UPDATE
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'tasks' },
-      (payload) => {
-
-        const updatedTask = payload.new
-
-        setAllTasksForBoss(prev =>
-          prev.map(t => t.id === updatedTask.id ? updatedTask : t)
-        )
-
-        if (updatedTask.station === selectedStation) {
-
-          if (updatedTask.status === "completed") {
-
-            setActiveTasks(prev =>
-              prev.filter(t => t.id !== updatedTask.id)
-            )
-
-            setArchive(prev => [updatedTask, ...prev])
-
+          if (newTask.station === selectedStation) {
+            setActiveTasks(prev => {
+              if (prev.some(t => t.id === newTask.id)) return prev;
+              return [newTask, ...prev];
+            });
           }
-
+          if (currentWorker?.role === 'boss') {
+            toast.success("Yangi ish qo'shildi");
+          }
         }
+      )
+      // TASK UPDATE
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'tasks' },
+        (payload) => {
+          const updatedTask = payload.new;
+          setAllTasksForBoss(prev =>
+            prev.map(t => t.id === updatedTask.id ? updatedTask : t)
+          );
 
-      }
-    )
-
-    // NOSOZLIK REALTIME
-.on(
+          if (updatedTask.station === selectedStation) {
+            if (updatedTask.status === "completed") {
+              setActiveTasks(prev =>
+                prev.filter(t => t.id !== updatedTask.id)
+              );
+              setArchive(prev => [updatedTask, ...prev]);
+            }
+          }
+        }
+      )
+      // NOSOZLIK REALTIME - INSERT
+      .on(
   'postgres_changes',
   { event: 'INSERT', schema: 'public', table: 'faults' },
   (payload) => {
     const fault = payload.new;
     if (currentWorker?.role === "boss" || currentWorker?.role === "admin") {
-      setActiveFault(fault);      // Ma'lumotni vidjet uchun saqlaydi
-      setShowBigAlert(true);     // Katta qizil oynani ochadi
+      setActiveFault(fault);
+      setShowBigAlert(true);
       toast.error("🚨 NOSOZLIK KELIB TUSHDI!");
+    }
+    // WORKER O'Z BEKATIDAGI NOSOZLIKNI KO'RADI
+    if (currentWorker?.role === "worker" && fault.station === selectedStation) {
+      setActiveFault(fault);
     }
   }
 )
-    .subscribe()
+      // NOSOZLIK REALTIME - UPDATE (bartaraf etilganda)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'faults' },
+        (payload) => {
+          const fault = payload.new;
+          if (fault.status === "resolved") {
+            setActiveFault(null);
+            setShowBigAlert(false);
+            toast.success("Nosozlik bartaraf etildi");
+          }
+        }
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel)
-  }
-
-}, [selectedStation, currentWorker])
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedStation, currentWorker]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('railway_user');
@@ -164,6 +219,7 @@ useEffect(() => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setAuthError("");
     const id = loginId.trim();
     const pass = loginPass.trim();
 
@@ -199,7 +255,15 @@ useEffect(() => {
   };
 
   const addWorker = async () => {
-    if (!newWorkerId || !newWorkerPass || !newWorkerName) return toast.error("Maydonlarni to'ldiring!");
+    if (!newWorkerId || !newWorkerPass || !newWorkerName) {
+      return toast.error("Maydonlarni to'ldiring!");
+    }
+
+    if (workersList.some(w => w.worker_id === newWorkerId)) {
+      toast.error("Bu ID allaqachon mavjud!");
+      return;
+    }
+
     const { error } = await supabase.from('allowed_emails').insert([{ 
       worker_id: newWorkerId, 
       password: newWorkerPass, 
@@ -252,76 +316,99 @@ useEffect(() => {
     }
   };
 
-const handleAddTask = async (ishNomi) => {
+const handleAddTask = async (ishObj) => {
   if (!currentWorker || !selectedStation) return;
-  
-  // Tugmani bir marta bosish uchun (agar loading state qo'shmoqchi bo'lsangiz)
-  // setIsSubmitting(true);
-  
-  const newTask = { 
-    worker_id: currentWorker.full_name, 
-    name: ishNomi, 
-    station: selectedStation, 
-    start_time: new Date().toISOString(), 
-    status: 'pending' 
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+
+  const newTask = {
+    worker_id: currentWorker.full_name,
+    name: ishObj.ish,
+    station: selectedStation,
+    start_time: new Date().toISOString(),
+    status: 'pending',
+    bolim: selectedBolim?.bolim || '',
+    davriylik: ishObj.davriylik || '',
+    bajaruvchi: ishObj.bajaruvchi || '',
+    jurnal: ishObj.jurnal || '',
   };
-  
+
   const { error } = await supabase.from('tasks').insert([newTask]);
-  
-  if (!error) {
-    // Local state'ni yangilashni realtime obunaga qoldiramiz
+
+  if (error) {
+    toast.error("Xatolik yuz berdi!");
+  } else {
     setShowTaskMenu(false);
+    setTaskMenuStep('main');
+    setSelectedBolim(null);
     toast.success("Yangi ish qo'shildi!");
-  } else {
-    toast.error("Xatolik yuz berdi!");
   }
-  
-  // setIsSubmitting(false);
+  setIsSubmitting(false);
 };
-
   const finishTask = async (taskId) => {
-  const { error } = await supabase.from('tasks').update({ 
-    status: 'completed', 
-    end_time: new Date().toISOString() 
-  }).eq('id', taskId);
-  
-  if (!error) {
-    // Local state'ni yangilashni realtime obunaga qoldiramiz
-    toast.success("Ish muvaffaqiyatli yakunlandi! ✅");
-  } else {
-    toast.error("Xatolik yuz berdi!");
-  }
-};
-const sendFault = async () => {
+    const { error } = await supabase.from('tasks').update({ 
+      status: 'completed', 
+      end_time: new Date().toISOString() 
+    }).eq('id', taskId);
+    
+    if (error) {
+      toast.error("Ishni yakunlashda xato!");
+      return;
+    }
 
-  if (!faultReason) return;
+    toast.success("Ish muvaffaqiyatli yakunlandi!");
+  };
 
-  if (faultReason === "Boshqa" && !customFaultReason) return;
+  const sendFault = async () => {
+    const { error } = await supabase
+      .from("faults")
+      .insert({
+        station: selectedStation,
+        reason: faultReason,
+        custom_reason: customFaultReason,
+        status: "active",
+        created_at: new Date()
+      });
 
-  const confirmSend = window.confirm("Nosozlik yuborilsinmi?");
+    if (error) {
+      toast.error("Nosozlik yuborishda xato!");
+      return;
+    }
 
-  if (!confirmSend) return;
-
-  const { error } = await supabase
-    .from("faults")
-    .insert({
-      station: selectedStation,
-      reason: faultReason,
-      custom_reason: customFaultReason
-    });
-
-  if (!error) {
     toast.success("Nosozlik yuborildi");
     setShowFaultModal(false);
+    setConfirmFaultSend(false);
     setFaultReason("");
     setCustomFaultReason("");
-  }
-};
+  };
+
+  const resolveFault = async () => {
+    if (!activeFault) return;
+    
+    const { error } = await supabase
+      .from("faults")
+      .update({ 
+        status: "resolved", 
+        resolved_at: new Date() 
+      })
+      .eq("id", activeFault.id);
+
+    if (error) {
+      toast.error("Xatolik yuz berdi!");
+    } else {
+      toast.success("Nosozlik bartaraf etildi");
+    }
+  };
+
   const formatFullDateTime = (isoString) => {
     if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleString('uz-UZ', { 
-      day: '2-digit', month: '2-digit', year: 'numeric', 
-      hour: '2-digit', minute: '2-digit' 
+    const date = new Date(isoString);
+    return date.toLocaleString('uz-UZ', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
@@ -334,7 +421,7 @@ const sendFault = async () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans cursor-default select-none">
+<div className="min-h-screen bg-slate-100 text-slate-900 font-sans select-none">
       <Toaster position="top-center" reverseOrder={false} />
 
       {view !== 'login' && (
@@ -346,14 +433,14 @@ const sendFault = async () => {
               </div>
               <div className="flex flex-col leading-none">
                 <h1 className="font-black text-lg uppercase tracking-tighter flex items-center gap-2">
-  Railway
-  {activeFault && (
-    <span className="relative flex h-3 w-3">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600 border border-white"></span>
-    </span>
-  )}
-</h1>
+                  Railway
+                  {activeFault && (
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600 border border-white"></span>
+                    </span>
+                  )}
+                </h1>
                 <span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest leading-none mt-1">
                   {selectedStation || currentWorker?.full_name}
                 </span>
@@ -369,7 +456,12 @@ const sendFault = async () => {
                 </button>
               )}
               <button 
-                onClick={() => { localStorage.clear(); setView('login'); toast.success("Tizimdan chiqildi."); }} 
+                onClick={() => { 
+                  localStorage.removeItem('railway_user');
+                  localStorage.removeItem('railway_station');
+                  setView('login'); 
+                  toast.success("Tizimdan chiqildi."); 
+                }}
                 className="bg-red-600 px-4 py-1.5 rounded-lg font-bold text-xs cursor-pointer shadow-md transition-all"
               >
                 Chiqish
@@ -420,99 +512,133 @@ const sendFault = async () => {
           </div>
         )}
 
-{view === 'boss_dashboard' && (
-  <div className="space-y-6 animate-in fade-in duration-500">
-    
-    {/* DOIMIY QIZIL VIDJET (PANEL) */}
-    {activeFault && (
-      <div className="mb-6 animate-in slide-in-from-top duration-500">
-        <div 
-          className="bg-red-600 text-white p-4 rounded-[24px] shadow-xl flex justify-between items-center border-b-4 border-red-800"
-        >
-          {/* Vidjet ustiga bossa, katta oyna qayta ochiladi */}
-          <div 
-            className="flex items-center gap-3 cursor-pointer flex-1" 
-            onClick={() => setShowBigAlert(true)} 
-          >
-            <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
-              <ShieldCheck size={20} className="text-white" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase opacity-70 leading-none mb-1 text-white">Faol nosozlik:</p>
-              <p className="font-black text-sm uppercase text-white leading-tight">
-                {activeFault.station} — {activeFault.reason === "Boshqa" ? activeFault.custom_reason : activeFault.reason}
-              </p>
-            </div>
-          </div>
-          
-          {/* O'chirish tugmasi */}
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              if(window.confirm("Nosozlik bartaraf etildimi? Panelni o'chirmoqchimisiz?")) {
-                setActiveFault(null);
-              }
-            }}
-            className="bg-red-900/50 hover:bg-red-900 p-2 rounded-xl transition-colors ml-4"
-          >
-            <X size={18} />
-          </button>
-        </div>
-      </div>
-    )}
+        {view === 'boss_dashboard' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            
+            {/* DOIMIY QIZIL VIDJET (PANEL) */}
+            {activeFault && (
+              <div className="mb-6 animate-in slide-in-from-top duration-500">
+                <div className="bg-red-600 text-white p-4 rounded-[24px] shadow-xl flex flex-col border-b-4 border-red-800">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
+                        <ShieldCheck size={20} className="text-white" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase opacity-70 leading-none mb-1 text-white">Faol nosozlik:</p>
+                        <p className="font-black text-sm uppercase text-white leading-tight">
+                          {activeFault.station} — {activeFault.reason === "Boshqa" ? activeFault.custom_reason : activeFault.reason}
+                        </p>
+                        {/* TAYMER */}
+                        <p className="text-xs text-yellow-200 mt-1">
+                          ⏱ {faultTimer}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* BARTARAF ETILDI TUGMASI */}
+                    
+                    <button 
+                      onClick={() => {
+                        if(window.confirm("Nosozlik bartaraf etildimi? Panelni o'chirmoqchimisiz?")) {
+                          setActiveFault(null);
+                        }
+                      }}
+                      className="bg-red-900/50 hover:bg-red-900 p-2 rounded-xl transition-colors"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
-    {/* NAZORAT PANELI SARLAVHASI */}
-    <div className="bg-white p-6 rounded-[32px] shadow-xl border-b-8 border-blue-900 flex flex-col md:flex-row justify-between items-center gap-4">
-      <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-        <ShieldCheck className="text-blue-900"/> Nazorat Paneli
-      </h2>
-      <div className="flex items-center gap-2 bg-green-50 px-4 py-2 rounded-xl border border-green-200">
-         <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
-         <span className="text-[10px] font-black text-green-700 uppercase">Live Rejim Yoqilgan</span>
-      </div>
-    </div>
+            {/* NAZORAT PANELI SARLAVHASI */}
+            <div className="bg-white p-6 rounded-[32px] shadow-xl border-b-8 border-blue-900 flex flex-col md:flex-row justify-between items-center gap-4">
+              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                <ShieldCheck className="text-blue-900"/> Nazorat Paneli
+              </h2>
+              <div className="flex items-center gap-2">
+                {/* NOSOZLIKLAR STATISTIKA TUGMASI */}
+                <button
+                  onClick={() => {
+                    loadFaultStats();
+                    setShowFaultStats(true);
+                  }}
+                  className="bg-red-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold cursor-pointer"
+                >
+                  <BarChart size={18} /> Nosozliklar
+                </button>
+                <div className="flex items-center gap-2 bg-green-50 px-4 py-2 rounded-xl border border-green-200">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
+                  <span className="text-[10px] font-black text-green-700 uppercase">Live Rejim Yoqilgan</span>
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-8">
               {BEKATLAR.map(station => {
-                const sTasks = allTasksForBoss.filter(t => t.station === station);
-                if (sTasks.length === 0) return null;
+                const sTasks = tasksByStation[station] || [];
+                const hasFault = activeFault?.station === station && activeFault?.status === "active";
+                
                 return (
-                  <div key={station} className="bg-white rounded-[32px] shadow-lg overflow-hidden border border-slate-200">
-                    <div className="bg-slate-50 p-5 border-b flex justify-between items-center">
-                      <h3 className="text-lg font-black text-blue-900 flex items-center gap-2 uppercase tracking-tighter">
-                        <MapPin size={20}/> {station} bekati
-                      </h3>
+                  <div key={station} className={`bg-white rounded-[32px] shadow-lg overflow-hidden border ${
+                    hasFault ? 'border-red-500 border-2' : 'border-slate-200'
+                  }`}>
+                    <div className={`p-5 border-b flex justify-between items-center ${
+                      hasFault ? 'bg-red-50' : 'bg-slate-50'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-black text-blue-900 flex items-center gap-2 uppercase tracking-tighter">
+                          <MapPin size={20}/> {station} bekati
+                        </h3>
+                        {hasFault && (
+                          <span className="bg-red-600 text-white text-[8px] px-2 py-1 rounded-full flex items-center gap-1">
+                            <AlertTriangle size={12} /> Nosozlik bor!
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] font-black bg-blue-900 text-white px-3 py-1 rounded-full uppercase tracking-widest">
                         Soni: {sTasks.length} ta
                       </span>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs font-bold">
-                        <thead className="bg-slate-100 text-slate-500 uppercase border-b">
-                          <tr>
-                            <th className="p-4">Ish nomi</th>
-                            <th className="p-4">Bajardi</th>
-                            <th className="p-4">Vaqt</th>
-                            <th className="p-4 text-center">Holat</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {sTasks.map(task => (
-                            <tr key={task.id} className="hover:bg-blue-50/50 transition-colors text-slate-800">
-                              <td className="p-4">{task.name}</td>
-                              <td className="p-4 text-blue-900">{task.worker_id}</td>
-                              <td className="p-4 text-slate-500 font-mono">
-                                {formatFullDateTime(task.start_time)}
-                              </td>
-                              <td className="p-4 text-center">
-                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${task.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700 animate-pulse'}`}>
-                                  {task.status === 'completed' ? 'Bajarildi' : 'Jarayonda'}
-                                </span>
-                              </td>
+                    
+                    {sTasks.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs font-bold">
+                          <thead className="bg-slate-100 text-slate-500 uppercase border-b">
+                            <tr>
+                              <th className="p-4">Ish nomi</th>
+                              <th className="p-4">Bajardi</th>
+                              <th className="p-4">Vaqt</th>
+                              <th className="p-4 text-center">Holat</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {sTasks.map(task => (
+                              <tr key={task.id} className="hover:bg-blue-50/50 transition-colors text-slate-800">
+                                <td className="p-4">{task.name}</td>
+                                <td className="p-4 text-blue-900">{task.worker_id}</td>
+                                <td className="p-4 text-slate-500 font-mono">
+                                  {formatFullDateTime(task.start_time)}
+                                </td>
+                                <td className="p-4 text-center">
+                                  <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${task.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700 animate-pulse'}`}>
+                                    {task.status === 'completed' ? 'Bajarildi' : 'Jarayonda'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    
+                    {sTasks.length === 0 && (
+                      <div className="p-8 text-center text-slate-400 font-bold">
+                        Bu bekatda hozircha ishlar yo'q
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -522,81 +648,197 @@ const sendFault = async () => {
 
         {view === 'station' && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-500">
-            {BEKATLAR.map(s => (
-              <button 
-                key={s} 
-                onClick={() => { setSelectedStation(s); localStorage.setItem('railway_station', s); setView('dashboard'); loadStationData(s); }} 
-                className="bg-white p-6 rounded-3xl shadow-md border-b-8 border-slate-200 hover:border-blue-900 hover:-translate-y-1 transition-all font-black text-xs text-slate-700 flex flex-col items-center gap-3 cursor-pointer uppercase"
-              >
-                <div className="bg-slate-50 p-3 rounded-2xl"><MapPin className="text-slate-400" size={24} /></div>{s}
-              </button>
+            {BEKATLAR.map(s => {
+              const hasFault = activeFault?.station === s && activeFault?.status === "active";
               
-            ))}
+              return (
+                <button 
+                  key={s} 
+               onClick={() => { setActiveTasks([]); setArchive([]); setSelectedStation(s); localStorage.setItem('railway_station', s); setView('dashboard'); loadStationData(s); }}
+                  className={`relative bg-white p-6 rounded-3xl shadow-md border-b-8 transition-all font-black text-xs flex flex-col items-center gap-3 cursor-pointer uppercase
+                    ${hasFault 
+                      ? 'border-b-8 border-red-600 bg-red-50 hover:bg-red-100' 
+                      : 'border-slate-200 hover:border-blue-900 hover:-translate-y-1 text-slate-700'
+                    }`}
+                >
+                  {/* NOSOZLIK BELGISI */}
+                  {hasFault && (
+                    <div className="absolute -top-2 -right-2 bg-red-600 text-white p-1.5 rounded-full shadow-lg">
+                      <span className="relative flex h-4 w-4">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 border border-white"></span>
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className={`p-3 rounded-2xl ${hasFault ? 'bg-red-100' : 'bg-slate-50'}`}>
+                    <MapPin className={hasFault ? 'text-red-600' : 'text-slate-400'} size={24} />
+                  </div>
+                  
+                  <div className="flex flex-col items-center">
+                    <span>{s}</span>
+                    {hasFault && (
+                      <span className="text-[8px] font-black text-red-600 uppercase mt-1 flex items-center gap-1">
+                        <AlertTriangle size={10} /> Nosozlik!
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {view === 'dashboard' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center gap-4">
-              <button 
-                onClick={() => { setView('station'); setSelectedStation(''); localStorage.removeItem('railway_station'); }} 
-                className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
-              >
-                <ArrowLeft size={16}/> Bekatlar
-              </button>
-              <div className="flex gap-2 font-black text-[10px] uppercase">
-                <button
-  onClick={() => setShowFaultModal(true)}
-  className="bg-red-600 text-white px-6 py-3 rounded-2xl shadow-xl"
->
-  NOSOZLIK
-</button>
-                <button onClick={() => setView('archive')} className="bg-slate-200 text-slate-700 px-6 py-3 rounded-2xl">Arxiv</button>
-                <button onClick={() => setShowTaskMenu(true)} className="bg-blue-900 text-white px-6 py-3 rounded-2xl shadow-xl">+ Ish qo'shish</button>
+{view === 'dashboard' && (
+  <div className="space-y-6">
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <button 
+        onClick={() => { setView('station'); setSelectedStation(''); localStorage.removeItem('railway_station'); }} 
+        className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
+      >
+        <ArrowLeft size={16}/> Bekatlar
+      </button>
+      
+      {/* NOSOZLIK HOLATI - AGAR BU BEKATDA BO'LSA */}
+      {activeFault?.station === selectedStation && activeFault?.status === "active" && (
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 bg-red-100 px-4 py-2 rounded-xl border border-red-300">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+            </span>
+            <span className="text-[10px] font-black text-red-700 uppercase">
+              Bu bekatda nosozlik bor!
+            </span>
+          </div>
+          
+          {/* BARTARAF ETILDI TUGMASI - FAQAT ODDIY ISHCHILAR UCHUN */}
+          {currentWorker?.role === 'worker' && (
+            <button
+              onClick={async () => {
+                if (window.confirm("Nosozlik bartaraf etildi. Tasdiqlaysizmi?")) {
+                  const { error } = await supabase
+                    .from("faults")
+                    .update({ 
+                      status: "resolved", 
+                      resolved_at: new Date() 
+                    })
+                    .eq("id", activeFault.id);
+                  
+                  if (!error) {
+                    toast.success("Nosozlik bartaraf etildi");
+                  }
+                }
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1"
+            >
+              <CheckCircle size={14} /> Bartaraf etildi
+            </button>
+          )}
+          
+          {/* BOSHLIQ VA ADMINGA KO'RSATMA */}
+          {(currentWorker?.role === 'boss' || currentWorker?.role === 'admin') && (
+  <div className="bg-orange-100 text-orange-800 px-4 py-2 rounded-xl text-xs font-bold border border-orange-300 flex items-center gap-1">
+    <AlertTriangle size={14} />
+    Sabab: {activeFault.reason === "Boshqa" ? activeFault.custom_reason : activeFault.reason}
+  </div>
+)}
+        </div>
+      )}
+      
+      <div className="flex gap-2 font-black text-[10px] uppercase ml-auto">
+       {currentWorker?.role === 'worker' && (
+  <button
+    onClick={() => setShowFaultModal(true)}
+    className="bg-red-600 text-white px-6 py-3 rounded-2xl shadow-xl cursor-pointer"
+  >
+    NOSOZLIK
+  </button>
+)}
+        <button onClick={() => setView('archive')} className="bg-slate-200 text-slate-700 px-6 py-3 rounded-2xl cursor-pointer">Arxiv</button>
+        <button onClick={() => setShowTaskMenu(true)} className="bg-blue-900 text-white px-6 py-3 rounded-2xl shadow-xl cursor-pointer">+ Ish qo'shish</button>
+      </div>
+    </div>
+    
+    <div className="grid gap-4">
+     <h3 className="font-black text-orange-600 flex items-center gap-2 text-xl uppercase tracking-widest leading-none">
+  <Clock size={24}/> {new Date().toLocaleDateString('uz-UZ')} — Bugungi ishlar ({activeTasks.length})
+</h3>
+{isLoadingTasks ? (
+  <div className="bg-white p-10 rounded-[32px] text-center">
+    <Loader2 className="animate-spin text-blue-900 mx-auto" size={32}/>
+  </div>
+) : activeTasks.length === 0 ? (
+  <div className="bg-white p-10 rounded-4xl text-center text-slate-400 font-black">
+    Hozircha aktiv ishlar yo'q
+  </div>
+) : (
+        activeTasks.map(task => (
+          <div key={task.id} className="bg-white p-6 rounded-4xl shadow-xl border-l-12 border-l-orange-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 animate-in slide-in-from-left duration-300">
+            <div className="space-y-2">
+              <p className="font-black text-xl text-slate-800 tracking-tight leading-tight">{task.name}</p>
+              <div className="flex flex-wrap gap-4 font-black text-[10px] uppercase tracking-tighter">
+                <span className="bg-blue-900 text-white px-3 py-1 rounded-lg flex items-center gap-1 shadow-md">
+                  <User size={12}/> {task.worker_id}
+                </span>
+                <span className="bg-orange-100 text-orange-900 px-3 py-1 rounded-lg border border-orange-200 flex items-center gap-1">
+                  <Clock size={12}/> {formatFullDateTime(task.start_time)}
+                </span>
               </div>
             </div>
-            <div className="grid gap-4">
-              <h3 className="font-black text-orange-600 flex items-center gap-2 text-xl uppercase tracking-widest leading-none">
-                <Clock size={24}/> Navbatchilikda ({activeTasks.length})
-              </h3>
-              {activeTasks.map(task => (
-                <div key={task.id} className="bg-white p-6 rounded-[32px] shadow-xl border-l-[12px] border-l-orange-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 animate-in slide-in-from-left duration-300">
-                  <div className="space-y-2">
-                    <p className="font-black text-xl text-slate-800 tracking-tight leading-tight">{task.name}</p>
-                    <div className="flex flex-wrap gap-4 font-black text-[10px] uppercase tracking-tighter">
-                       <span className="bg-blue-900 text-white px-3 py-1 rounded-lg flex items-center gap-1 shadow-md">
-                         <User size={12}/> {task.worker_id}
-                       </span>
-                       <span className="bg-orange-100 text-orange-900 px-3 py-1 rounded-lg border border-orange-200 flex items-center gap-1">
-                         <Clock size={12}/> {formatFullDateTime(task.start_time)}
-                       </span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => finishTask(task.id)} 
-                    className="bg-green-600 text-white px-10 py-4 rounded-2xl font-black text-lg hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase tracking-tighter"
-                  >
-                    Tugatish
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {view === 'archive' && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-500">
             <button 
-              onClick={() => setView('dashboard')} 
-              className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
+              onClick={() => finishTask(task.id)} 
+              className="bg-green-600 text-white px-10 py-4 rounded-2xl font-black text-lg hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase tracking-tighter"
             >
-              <ArrowLeft size={16}/> Ortga
+              Tugatish
             </button>
-            <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 uppercase tracking-tighter leading-none">
-              <History className="text-blue-900" /> Arxiv: {selectedStation}
-            </h2>
-            <div className="grid gap-4">
-              {archive.map(item => (
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
+{view === 'archive' && (
+  <div className="space-y-6 animate-in slide-in-from-right duration-500">
+    <button
+      onClick={() => setView('dashboard')}
+      className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
+    >
+      <ArrowLeft size={16}/> Ortga
+    </button>
+    <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 uppercase tracking-tighter leading-none">
+      <History className="text-blue-900" /> Arxiv: {selectedStation}
+    </h2>
+
+    {archive.length === 0 ? (
+      <div className="bg-white p-10 rounded-[32px] text-center text-slate-400 font-black">
+        Arxivda ishlar yo'q
+      </div>
+    ) : (
+      (() => {
+        // Sanalar bo'yicha guruhlash
+        const grouped = {};
+        archive.forEach(item => {
+          const sana = item.end_time?.slice(0, 10) || item.start_time?.slice(0, 10) || 'Noma\'lum';
+          if (!grouped[sana]) grouped[sana] = [];
+          grouped[sana].push(item);
+        });
+
+        return Object.entries(grouped)
+          .sort(([a], [b]) => b.localeCompare(a))
+          .map(([sana, ishlar]) => (
+            <div key={sana} className="space-y-3">
+              {/* SANA SARLAVHASI */}
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-900 text-white px-4 py-2 rounded-xl font-black text-sm">
+                  📅 {new Date(sana).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </div>
+                <div className="h-px flex-1 bg-slate-200"></div>
+                <span className="text-xs font-black text-slate-400">{ishlar.length} ta ish</span>
+              </div>
+
+              {/* O'SHA KUNDAGI ISHLAR */}
+              {ishlar.map(item => (
                 <div key={item.id} className="bg-white p-6 rounded-[32px] border-l-8 border-l-green-600 shadow-md text-slate-800">
                   <p className="font-black text-lg tracking-tight leading-tight">{item.name}</p>
                   <div className="mt-3 flex flex-wrap gap-3 text-[10px] font-black uppercase tracking-tighter opacity-70">
@@ -607,8 +849,11 @@ const sendFault = async () => {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ));
+      })()
+    )}
+  </div>
+)}
       </main>
 
       {showAdminPanel && (
@@ -650,7 +895,7 @@ const sendFault = async () => {
                         </td>
                         <td className="p-6 font-mono text-orange-700">
                           {editingWorker?.id === w.id ? (
-                             <input className="p-2 border rounded w-full" value={editPass} placeholder="Yangi parol" onChange={e => setEditPass(e.target.value)} />
+                            <input className="p-2 border rounded w-full" value={editPass} placeholder="Yangi parol" onChange={e => setEditPass(e.target.value)} />
                           ) : w.worker_id}
                         </td>
                         <td className="p-6 text-right flex justify-end gap-2">
@@ -675,140 +920,267 @@ const sendFault = async () => {
         </div>
       )}
 
-      {showTaskMenu && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[50px] shadow-2xl p-10 border-t-[16px] border-blue-900 animate-in zoom-in-95 duration-200 text-slate-800">
-            <div className="flex justify-between items-center mb-8 pb-4 border-b-2 border-slate-50">
-              <h3 className="text-2xl font-black tracking-tighter uppercase">ISHNI TANLANG</h3>
-              <button onClick={() => setShowTaskMenu(false)} className="bg-slate-100 p-3 rounded-full hover:bg-slate-200 cursor-pointer transition-colors"><X size={32}/></button>
-            </div>
-            <div className="grid grid-cols-1 gap-3 max-h-[50vh] overflow-y-auto pr-2 font-black uppercase tracking-tighter text-xs">
-              {ISH_TURLARI.map(ish => (
-                <button 
-                  key={ish} 
-                  onClick={() => handleAddTask(ish)} 
-                  className="w-full text-left p-6 rounded-[30px] bg-slate-50 hover:bg-blue-900 hover:text-white border-2 border-slate-100 transition-all flex justify-between items-center group cursor-pointer shadow-sm"
-                >
-                  {ish} <Plus size={24} className="group-hover:text-white transition-colors" />
-                </button>
-              ))}
+{showTaskMenu && (
+  <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-lg rounded-[50px] shadow-2xl border-t-[16px] border-blue-900 animate-in zoom-in-95 duration-200 text-slate-800 overflow-hidden flex flex-col max-h-[85vh]">
+
+      {/* HEADER */}
+      <div className="flex justify-between items-center p-6 pb-4 border-b-2 border-slate-50">
+        <div>
+          {taskMenuStep !== 'main' && (
+            <button
+              onClick={() => {
+                if (taskMenuStep === 'ishlar') setTaskMenuStep('bolimlar');
+                else setTaskMenuStep('main');
+              }}
+              className="text-blue-900 font-black text-xs flex items-center gap-1 mb-1 cursor-pointer hover:underline"
+            >
+              <ArrowLeft size={14}/> Ortga
+            </button>
+          )}
+          <h3 className="text-xl font-black tracking-tighter uppercase">
+            {taskMenuStep === 'main' && 'ISHNI TANLANG'}
+            {taskMenuStep === 'bolimlar' && "BO'LIM TANLANG"}
+            {taskMenuStep === 'ishlar' && selectedBolim?.bolim}
+          </h3>
+        </div>
+        <button
+          onClick={() => {
+            setShowTaskMenu(false);
+            setTaskMenuStep('main');
+            setSelectedBolim(null);
+          }}
+          className="bg-slate-100 p-3 rounded-full hover:bg-slate-200 cursor-pointer"
+        >
+          <X size={28}/>
+        </button>
+      </div>
+
+      {/* KONTENT */}
+      <div className="overflow-y-auto p-6 space-y-3">
+
+        {/* BOSQICH 1: MAIN */}
+        {taskMenuStep === 'main' && (
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={() => { setSelectedReja('yillik'); setTaskMenuStep('bolimlar'); }}
+              className="w-full text-left p-6 rounded-3xl bg-blue-900 text-white font-black flex justify-between items-center cursor-pointer shadow-lg"
+            >
+              <div>
+                <p className="text-lg">📋 Yillik reja grafigi</p>
+                <p className="text-xs opacity-70 font-normal mt-1">136 ta ish • 23 ta bo'lim</p>
+              </div>
+              <Plus size={24}/>
+            </button>
+            <button
+              onClick={() => { setSelectedReja('haftalik'); setTaskMenuStep('bolimlar'); }}
+              className="w-full text-left p-6 rounded-3xl bg-green-700 text-white font-black flex justify-between items-center cursor-pointer shadow-lg"
+            >
+              <div>
+                <p className="text-lg">📅 4 haftalik reja</p>
+                <p className="text-xs opacity-70 font-normal mt-1">51 ta ish • 18 ta bo'lim</p>
+              </div>
+              <Plus size={24}/>
+            </button>
+          </div>
+        )}
+
+        {/* BOSQICH 2: BO'LIMLAR */}
+        {taskMenuStep === 'bolimlar' && (
+          (selectedReja === 'yillik' ? YILLIK_REJA : TORT_HAFTALIK_REJA).map((bolim, i) => (
+            <button
+              key={i}
+              onClick={() => { setSelectedBolim(bolim); setTaskMenuStep('ishlar'); }}
+              className="w-full text-left p-5 rounded-[20px] bg-slate-50 hover:bg-blue-900 hover:text-white border-2 border-slate-100 transition-all flex justify-between items-center group cursor-pointer"
+            >
+              <div>
+                <p className="font-black text-sm">{bolim.bolim}</p>
+                <p className="text-[10px] opacity-60 mt-0.5">{bolim.ishlar.length} ta ish</p>
+              </div>
+              <Plus size={20} className="opacity-50 group-hover:opacity-100"/>
+            </button>
+          ))
+        )}
+
+        {/* BOSQICH 3: ISHLAR */}
+        {taskMenuStep === 'ishlar' && selectedBolim && (
+          selectedBolim.ishlar.map((ish, i) => (
+            <button
+              key={i}
+              onClick={() => handleAddTask(ish)}
+              disabled={isSubmitting}
+              className="w-full text-left p-5 rounded-[20px] bg-slate-50 hover:bg-blue-900 hover:text-white border-2 border-slate-100 transition-all group cursor-pointer disabled:opacity-50"
+            >
+              <p className="font-black text-xs leading-relaxed">{ish.ish}</p>
+              <div className="flex gap-3 mt-2 text-[9px] opacity-50 group-hover:opacity-80">
+                <span>⏱ {ish.davriylik}</span>
+                <span>👤 {ish.bajaruvchi}</span>
+              </div>
+            </button>
+          ))
+        )}
+
+      </div>
+    </div>
+  </div>
+)}
+
+      {/* NOSOZLIK MODALI */}
+      {showFaultModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+          <div className="bg-white w-full max-w-md p-8 rounded-3xl space-y-4">
+            <h2 className="text-2xl font-black text-red-600 uppercase">
+              Nosozlik sababi
+            </h2>
+
+            <select
+              value={faultReason}
+              onChange={(e) => setFaultReason(e.target.value)}
+              className="w-full border p-3 rounded-xl"
+            >
+              <option value="">Sababni tanlang</option>
+              <option value="Rels zanjiri">Rels zanjiri</option>
+              <option value="Strelkali o'tkazgich">Strelkali o'tkazgich</option>
+              <option value="Yolg'on bandlik">Yolg'on bandlik</option>
+              <option value="Yo'nalishni o'zgartirish">Yo'nalishni o'zgartirish</option>
+              <option value="Boshqa">Boshqa sabab</option>
+            </select>
+
+            {faultReason === "Boshqa" && (
+              <textarea
+                placeholder="Sababni yozing"
+                value={customFaultReason}
+                onChange={(e) => setCustomFaultReason(e.target.value)}
+                className="w-full border p-3 rounded-xl"
+              />
+            )}
+
+            <div className="flex gap-3">
+              <button
+                disabled={!faultReason || (faultReason === "Boshqa" && !customFaultReason)}
+                onClick={() => setConfirmFaultSend(true)}
+                className="flex-1 bg-red-600 text-white py-3 rounded-xl disabled:bg-gray-400"
+              >
+                Yuborish
+              </button>
+              <button
+                onClick={() => setShowFaultModal(false)}
+                className="flex-1 bg-gray-200 py-3 rounded-xl"
+              >
+                Bekor qilish
+              </button>
             </div>
           </div>
         </div>
       )}
-      {showFaultModal && (
-<div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
 
-<div className="bg-white w-full max-w-md p-8 rounded-3xl space-y-4">
+      {/* TASDIQLASH MODALI */}
+      {confirmFaultSend && (
+        <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center">
+          <div className="bg-white p-8 rounded-3xl text-center max-w-sm space-y-4">
+            <h3 className="text-xl font-black text-red-600">
+              Nosozlik yuborilsinmi?
+            </h3>
+            <div className="flex gap-3">
+              <button
+                onClick={sendFault}
+                className="flex-1 bg-red-600 text-white py-3 rounded-xl"
+              >
+                Yuborish
+              </button>
+              <button
+                onClick={() => setConfirmFaultSend(false)}
+                className="flex-1 bg-gray-200 py-3 rounded-xl"
+              >
+                Bekor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-<h2 className="text-2xl font-black text-red-600 uppercase">
-Nosozlik sababi
-</h2>
+      {/* KATTA QIZIL OGOHLANTIRISH */}
+      {showBigAlert && activeFault && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
+          <div className="bg-red-600 text-white p-10 rounded-[50px] text-center max-w-md shadow-[0_0_50px_rgba(220,38,38,0.5)] animate-in zoom-in-95 border-4 border-white relative">
+            <div className="mb-4 flex justify-center">
+              <div className="bg-white/20 p-6 rounded-full">
+                <ShieldCheck size={80} className="animate-bounce" />
+              </div>
+            </div>
+            <h2 className="text-4xl font-black mb-4 uppercase tracking-tighter">Diqqat!</h2>
+            <div className="space-y-3 bg-black/20 p-6 rounded-[30px] border border-white/10">
+              <p className="text-2xl">Bekat: <b className="text-yellow-300">{activeFault.station}</b></p>
+              <p className="text-lg opacity-90 italic">
+                {activeFault.reason === "Boshqa" ? activeFault.custom_reason : activeFault.reason}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setShowBigAlert(false);
+                // VIDJET QOLISHI UCHUN activeFault o'chirilmaydi
+              }}
+              className="mt-8 bg-white text-red-600 w-full py-5 rounded-3xl font-black text-xl hover:shadow-2xl active:scale-95 transition-all uppercase"
+            >
+              Tushunarli
+            </button>
+          </div>
+        </div>
+      )}
 
-<select
-value={faultReason}
-onChange={(e)=>setFaultReason(e.target.value)}
-className="w-full border p-3 rounded-xl"
->
-
-<option value="">Sababni tanlang</option>
-<option value="Rels zanjiri">Rels zanjiri</option>
-<option value="Strelkali o'tkazgich">Strelkali o'tkazgich</option>
-<option value="Yolg'on bandlik">Yolg'on bandlik</option>
-<option value="Yo'nalishni o'zgartirish">Yo'nalishni o'zgartirish</option>
-<option value="Boshqa">Boshqa sabab</option>
-
-</select>
-
-{faultReason === "Boshqa" && (
-
-<textarea
-placeholder="Sababni yozing"
-value={customFaultReason}
-onChange={(e)=>setCustomFaultReason(e.target.value)}
-className="w-full border p-3 rounded-xl"
-/>
-
-)}
-
-<div className="flex gap-3">
-
-<button
-disabled={!faultReason || (faultReason==="Boshqa" && !customFaultReason)}
-onClick={sendFault}
-className="flex-1 bg-red-600 text-white py-3 rounded-xl disabled:bg-gray-400"
->
-Yuborish
-</button>
-
-<button
-onClick={()=>setShowFaultModal(false)}
-className="flex-1 bg-gray-200 py-3 rounded-xl"
->
-Bekor qilish
-</button>
-
-</div>
-
-</div>
-</div>
-)}
-
-{activeFault && (
-
-<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
-
-<div className="bg-red-600 text-white p-10 rounded-3xl text-center max-w-md">
-
-<h2 className="text-3xl font-black mb-4">
-🚨 NOSOZLIK
-</h2>
-
-<p className="text-xl">
-Bekat: <b>{activeFault.station}</b>
-</p>
-
-<p className="mt-2">
-Sabab:
-<b>
-{/* KATTA QIZIL OGOHLANTIRISH (FAQAT showBigAlert BO'LSA) */}
-{showBigAlert && activeFault && (
-  <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
-    <div className="bg-red-600 text-white p-10 rounded-[40px] text-center max-w-md shadow-2xl animate-in zoom-in-95 border-4 border-white">
-      <div className="mb-4 flex justify-center text-white">
-        <ShieldCheck size={80} className="animate-bounce" />
-      </div>
-      <h2 className="text-4xl font-black mb-4 uppercase tracking-tighter text-white">🚨 Nosozlik!</h2>
+      {/* NOSOZLIKLAR STATISTIKA MODALI */}
+{showFaultStats && (
+  <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-3xl rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
       
-      <div className="space-y-2 bg-white/10 p-4 rounded-2xl">
-        <p className="text-xl text-white">Bekat: <b className="text-yellow-300">{activeFault.station}</b></p>
-        <p className="text-lg text-white">
-          Sabab: <b>{activeFault.reason === "Boshqa" ? activeFault.custom_reason : activeFault.reason}</b>
-        </p>
+      {/* HEADER */}
+      <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100 bg-white">
+        <h2 className="text-2xl font-black text-red-600">Nosozliklar statistikasi</h2>
+        <button
+          onClick={() => setShowFaultStats(false)}
+          className="bg-slate-100 p-2 rounded-full hover:bg-slate-200 cursor-pointer"
+        >
+          <X size={24} />
+        </button>
       </div>
 
-      <button
-        onClick={() => setShowBigAlert(false)} 
-        className="mt-8 bg-white text-red-600 w-full py-4 rounded-2xl font-black text-xl hover:bg-slate-100 active:scale-95 transition-all shadow-lg uppercase"
-      >
-        Tushunarli
-      </button>
+      {/* SCROLL QISM */}
+      <div className="overflow-y-auto p-8 space-y-4">
+        {faultHistory.length === 0 ? (
+          <p className="text-center py-8 text-gray-500">Hozircha nosozliklar yo'q</p>
+        ) : (
+          faultHistory.map(f => {
+            const duration = f.resolved_at
+              ? Math.floor((new Date(f.resolved_at) - new Date(f.created_at)) / 60000)
+              : null;
+            return (
+              <div key={f.id} className="border p-4 rounded-xl">
+                <p className="font-bold">{f.station}</p>
+                <p>{f.reason === "Boshqa" ? f.custom_reason : f.reason}</p>
+                <p className="text-sm text-gray-500">Boshlangan: {formatFullDateTime(f.created_at)}</p>
+                {f.resolved_at && (
+                  <p className="text-sm text-gray-500">Tugagan: {formatFullDateTime(f.resolved_at)}</p>
+                )}
+                {duration && (
+                  <p className="text-green-600 font-bold mt-1">Bartaraf etish vaqti: {duration} min</p>
+                )}
+                {!f.resolved_at && (
+                  <p className="text-red-600 font-bold mt-1">Aktiv (davom etmoqda)</p>
+                )}
+              </div>
+            );
+          })
+        )}
+        <button
+          onClick={() => setShowFaultStats(false)}
+          className="w-full bg-gray-200 py-3 rounded-xl font-bold cursor-pointer"
+        >
+          Yopish
+        </button>
+      </div>
+
     </div>
   </div>
-)}
-</b>
-</p>
-
-<button
-onClick={()=>setActiveFault(null)}
-className="mt-6 bg-white text-red-600 px-6 py-3 rounded-xl font-bold"
->
-Yopish
-</button>
-
-</div>
-</div>
-
 )}
     </div>
   );
