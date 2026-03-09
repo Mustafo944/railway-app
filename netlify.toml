@@ -1,10 +1,9 @@
 [build]
+  command = "npm run build"
   publish = ".next"
-  command = "npm ci && npm run build"  # npm ci aniqroq versiyalarni o'rnatadi
+
+[build.environment]
+  NODE_VERSION = "20"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-[build.environment]
-  NODE_VERSION = "20.x"  # Node.js versiyasini belgilash
-  NPM_FLAGS = "--force"
