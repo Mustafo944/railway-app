@@ -708,6 +708,9 @@ const groupedArchive = useMemo(() => {
                     </span>
                   )}
                 </h1>
+                <span className="text-[10px] text-yellow-300 font-black uppercase tracking-widest leading-none">
+  SHCH BUXORO
+</span>
                 <span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest leading-none mt-1">
                   {selectedStation || currentWorker?.full_name}
                 </span>
