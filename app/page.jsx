@@ -750,7 +750,8 @@ const groupedArchive = useMemo(() => {
         {view === 'login' && (
           <div className="flex items-center justify-center min-h-[80vh]">
             <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border-t-12px border-blue-900 text-center">
-<img src="/logo.png" alt="Logo" className="w-48 h-48 object-contain mb-6 mx-auto" />
+<img src="/logo.png" alt="Logo" className="w-48 h-48 object-contain mb-2 mx-auto" />
+<p className="text-2xl font-black text-blue-900 uppercase tracking-widest mb-6">SHCH BUXORO</p>
               <h2 className="text-3xl font-black mb-8 text-slate-800 tracking-tighter uppercase">Kirish</h2>
               <form onSubmit={handleLogin} className="space-y-4">
                 <input 
@@ -1743,7 +1744,7 @@ return selectedBolim.ishlar.map((ish) => (
 
       {/* NOSOZLIKLAR STATISTIKA MODALI */}
 {showFaultStats && (
-  <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+  <div className="fixed inset-0 bg-black/70 z-200 flex items-center justify-center p-4">
     <div className="bg-white w-full max-w-3xl rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
       
       {/* HEADER */}
