@@ -60,15 +60,37 @@ const [yangibolimNomi, setYangiBolimNomi] = useState('');
 const [yangiIsh, setYangiIsh] = useState({ ish: '', davriylik: '', bajaruvchi: '', jurnal: '' });
 const [isRejaSubmitting, setIsRejaSubmitting] = useState(false);
 const [editId, setEditId] = useState('');
+const [bossArchive, setBossArchive] = useState({});
+const [showBossArchive, setShowBossArchive] = useState(null);
+const [bossArchiveDates, setBossArchiveDates] = useState([]);
+const [selectedArchiveDate, setSelectedArchiveDate] = useState(null);
+const [showFaultArchive, setShowFaultArchive] = useState(false);
+const [faultArchiveDates, setFaultArchiveDates] = useState([]);
+const [faultArchiveGrouped, setFaultArchiveGrouped] = useState({});
+const [selectedFaultDate, setSelectedFaultDate] = useState(null);
+const [confirmFinishTask, setConfirmFinishTask] = useState(null);
+const [photoConfirmed, setPhotoConfirmed] = useState(false);
+const [showStationFaultArchive, setShowStationFaultArchive] = useState(false);
+const [stationFaultArchive, setStationFaultArchive] = useState([]);
+const [stationFaultArchiveGrouped, setStationFaultArchiveGrouped] = useState({});
+const [stationFaultArchiveDates, setStationFaultArchiveDates] = useState([]);
+const [selectedStationFaultDate, setSelectedStationFaultDate] = useState(null);
+const [selectedArchiveViewDate, setSelectedArchiveViewDate] = useState(null);
   const loadWorkers = useCallback(async () => {
     const { data } = await supabase.from('allowed_emails').select('*').order('role', { ascending: true });
     if (data) setWorkersList(data);
   }, []);
 
-  const loadAllTasks = useCallback(async () => {
-    const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
-    if (data) setAllTasksForBoss(data);
-  }, []);
+const loadAllTasks = useCallback(async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('tasks')
+    .select('*')
+    .gte('start_time', today + 'T00:00:00')
+    .lte('start_time', today + 'T23:59:59')
+    .order('created_at', { ascending: false });
+  if (data) setAllTasksForBoss(data);
+}, []);
 
 const loadStationData = useCallback(async (station) => {
   setIsLoadingTasks(true);
@@ -103,6 +125,66 @@ const loadStationData = useCallback(async (station) => {
       .order("created_at", { ascending: false });
     if (data) setFaultHistory(data);
   };
+  const loadFaultArchive = async () => {
+  const { data } = await supabase
+    .from('faults')
+    .select('*')
+    .eq('status', 'resolved')
+    .order('created_at', { ascending: false });
+  
+  if (data) {
+    const grouped = {};
+    data.forEach(f => {
+      const date = f.created_at?.slice(0, 10);
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(f);
+    });
+    setFaultArchiveGrouped(grouped);
+    setFaultArchiveDates(Object.keys(grouped).sort((a, b) => b.localeCompare(a)));
+    setSelectedFaultDate(null);
+    setShowFaultArchive(true);
+  }
+};
+  const loadBossArchive = async (station) => {
+  const { data } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('station', station)
+    .eq('status', 'completed')
+    .order('end_time', { ascending: false });
+  
+  if (data) {
+    const grouped = {};
+    data.forEach(task => {
+      const date = task.end_time?.slice(0, 10) || task.start_time?.slice(0, 10);
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(task);
+    });
+    setBossArchive(grouped);
+    setBossArchiveDates(Object.keys(grouped).sort((a, b) => b.localeCompare(a)));
+    setSelectedArchiveDate(null);
+    setShowBossArchive(station);
+  }
+};
+const loadStationFaultArchive = async () => {
+  const { data } = await supabase
+    .from('faults')
+    .select('*')
+    .eq('station', selectedStation)
+    .order('created_at', { ascending: false });
+  if (data) {
+    const grouped = {};
+    data.forEach(f => {
+      const date = f.created_at?.slice(0, 10);
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(f);
+    });
+    setStationFaultArchiveGrouped(grouped);
+    setStationFaultArchiveDates(Object.keys(grouped).sort((a, b) => b.localeCompare(a)));
+    setSelectedStationFaultDate(null);
+    setShowStationFaultArchive(true);
+  }
+};
 const loadRejaBolimlar = async (turi) => {
   const { data } = await supabase
     .from('reja_bolimlar')
@@ -328,8 +410,13 @@ supabase
 });
         if (data.role === 'boss' || data.role === 'admin') {
   setView('boss_dashboard');
-  supabase.from('tasks').select('*').order('created_at', { ascending: false })
-    .then(({ data }) => { if (data) setAllTasksForBoss(data); });
+const today = new Date().toISOString().slice(0, 10);
+supabase.from('tasks').select('*')
+  .gte('start_time', today + 'T00:00:00')
+  .lte('start_time', today + 'T23:59:59')
+  .order('created_at', { ascending: false })
+  .then(({ data }) => { if (data) setAllTasksForBoss(data); });
+
 
         } else if (savedStation) {
           setSelectedStation(savedStation);
@@ -501,13 +588,14 @@ const finishTask = async (taskId) => {
   .eq('id', taskId)
   .eq('station', selectedStation);
     
-    if (error) {
-      toast.error("Ishni yakunlashda xato!");
-      return;
-    }
-
-    toast.success("Ish muvaffaqiyatli yakunlandi!");
-  };
+  if (error) {
+    toast.error("Ishni yakunlashda xato!");
+    return;
+  }
+  toast.success("Ish muvaffaqiyatli yakunlandi!");
+  setConfirmFinishTask(null);
+  setPhotoConfirmed(false);
+};
 
 const sendFault = async () => {
   if (isSubmitting) return;
@@ -603,35 +691,35 @@ const groupedArchive = useMemo(() => {
                 </span>
               </div>
             </div>
-            <div className="flex gap-4">
-              {isAdmin && (
-                <button 
-                  onClick={() => { setShowAdminPanel(true); loadWorkers(); }} 
-                  className="bg-orange-500 px-4 py-1.5 rounded-lg font-black text-[10px] cursor-pointer shadow-md uppercase transition-all"
-                >
-                  ADMIN
-                </button>
-              )}
-              {isAdmin && (
+ <div className="flex gap-2">
+  {isAdmin && (
+    <button 
+      onClick={() => { setShowAdminPanel(true); loadWorkers(); }} 
+      className="bg-orange-500 px-2 sm:px-4 py-1.5 rounded-lg font-black text-[9px] sm:text-[10px] cursor-pointer shadow-md uppercase transition-all"
+    >
+      ADMIN
+    </button>
+  )}
+  {isAdmin && (
+    <button 
+      onClick={() => { setShowRejaPanel(true); setRejaStep('main'); }}
+      className="bg-purple-600 px-2 sm:px-4 py-1.5 rounded-lg font-black text-[9px] sm:text-[10px] cursor-pointer shadow-md uppercase transition-all text-white"
+    >
+      REJA
+    </button>
+  )}
   <button 
-    onClick={() => { setShowRejaPanel(true); setRejaStep('main'); }}
-    className="bg-purple-600 px-4 py-1.5 rounded-lg font-black text-[10px] cursor-pointer shadow-md uppercase transition-all text-white"
+    onClick={() => { 
+      localStorage.removeItem('railway_user');
+      localStorage.removeItem('railway_station');
+      setView('login'); 
+      toast.success("Tizimdan chiqildi."); 
+    }}
+    className="bg-red-600 px-2 sm:px-4 py-1.5 rounded-lg font-bold text-[9px] sm:text-xs cursor-pointer shadow-md transition-all"
   >
-    REJA
+    Chiqish
   </button>
-)}
-              <button 
-                onClick={() => { 
-                  localStorage.removeItem('railway_user');
-                  localStorage.removeItem('railway_station');
-                  setView('login'); 
-                  toast.success("Tizimdan chiqildi."); 
-                }}
-                className="bg-red-600 px-4 py-1.5 rounded-lg font-bold text-xs cursor-pointer shadow-md transition-all"
-              >
-                Chiqish
-              </button>
-            </div>
+</div>
           </div>
         </header>
       )}
@@ -684,7 +772,7 @@ const groupedArchive = useMemo(() => {
 {activeFaults.length > 0 && (
   <div className="mb-6 space-y-3 animate-in slide-in-from-top duration-500">
     {activeFaults.map(fault => (
-      <div key={fault.id} className="bg-red-600 text-white p-4 rounded-[24px] shadow-xl border-b-4 border-red-800">
+      <div key={fault.id} className="bg-red-600 text-white p-4 rounded-3xl shadow-xl border-b-4 border-red-800">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3 flex-1">
             <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
@@ -725,10 +813,16 @@ const groupedArchive = useMemo(() => {
                 >
                   <BarChart size={18} /> Nosozliklar
                 </button>
-                <div className="flex items-center gap-2 bg-green-50 px-4 py-2 rounded-xl border border-green-200">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
-                  <span className="text-[10px] font-black text-green-700 uppercase">Live Rejim Yoqilgan</span>
-                </div>
+                <button
+  onClick={loadFaultArchive}
+  className="bg-slate-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold cursor-pointer"
+>
+  <History size={18} /> Arxiv
+</button>
+<div className="flex items-center gap-1 bg-green-50 px-2 py-2 rounded-xl border border-green-200">
+  <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
+  <span className="text-[10px] font-black text-green-700 uppercase hidden sm:inline">Live Rejim Yoqilgan</span>
+</div>
               </div>
             </div>
 {/* LIVE STATISTIKA */}
@@ -784,23 +878,31 @@ const groupedArchive = useMemo(() => {
                   <div key={station} className={`bg-white rounded-[32px] shadow-lg overflow-hidden border ${
                     hasFault ? 'border-red-500 border-2' : 'border-slate-200'
                   }`}>
-                    <div className={`p-5 border-b flex justify-between items-center ${
-                      hasFault ? 'bg-red-50' : 'bg-slate-50'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-black text-blue-900 flex items-center gap-2 uppercase tracking-tighter">
-                          <MapPin size={20}/> {station} bekati
-                        </h3>
-                        {hasFault && (
-                          <span className="bg-red-600 text-white text-[8px] px-2 py-1 rounded-full flex items-center gap-1">
-                            <AlertTriangle size={12} /> Nosozlik bor!
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] font-black bg-blue-900 text-white px-3 py-1 rounded-full uppercase tracking-widest">
-                        Soni: {sTasks.length} ta
-                      </span>
-                    </div>
+        <div className={`p-5 border-b flex justify-between items-center ${
+  hasFault ? 'bg-red-50' : 'bg-slate-50'
+}`}>
+  <div className="flex items-center gap-2">
+    <h3 className="text-lg font-black text-blue-900 flex items-center gap-2 uppercase tracking-tighter">
+      <MapPin size={20}/> {station} bekati
+    </h3>
+    {hasFault && (
+      <span className="bg-red-600 text-white text-[8px] px-2 py-1 rounded-full flex items-center gap-1">
+        <AlertTriangle size={12} /> Nosozlik bor!
+      </span>
+    )}
+  </div>
+  <div className="flex items-center gap-2">
+    <button
+      onClick={() => loadBossArchive(station)}
+      className="text-[10px] font-black bg-slate-700 text-white px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:bg-slate-900"
+    >
+      <History size={12}/> Arxiv
+    </button>
+    <span className="text-[10px] font-black bg-blue-900 text-white px-3 py-1 rounded-full uppercase tracking-widest">
+      Bugun: {sTasks.length} ta
+    </span>
+  </div>
+</div>
                     
                     {sTasks.length > 0 && (
                       <div className="overflow-x-auto">
@@ -948,14 +1050,24 @@ const groupedArchive = useMemo(() => {
   );
 })()}
       
-<div className="fixed bottom-0 left-0 right-0 sm:static flex gap-2 font-black text-[10px] uppercase p-4 bg-white/95 backdrop-blur sm:p-0 sm:bg-transparent sm:ml-auto z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] sm:shadow-none">
-       {currentWorker?.role === 'worker' && (
-<button onClick={() => setShowFaultModal(true)}
-  className="bg-red-600 text-white px-6 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none"
->NOSOZLIK</button>
+<div className="fixed bottom-0 left-0 right-0 sm:static flex gap-1 font-black text-[9px] uppercase p-3 bg-white/95 backdrop-blur sm:p-0 sm:bg-transparent sm:ml-auto shadow-[0_-4px_20px_rgba(0,0,0,0.08)] sm:shadow-none">
+    {currentWorker?.role === 'worker' && (
+  <button onClick={() => setShowFaultModal(true)}
+    className="bg-red-600 text-white px-3 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none text-[9px]"
+  >NOSOZLIK</button>
 )}
-        <button onClick={() => setView('archive')} className="bg-slate-200 text-slate-700 px-6 py-3 rounded-2xl cursor-pointer flex-1 sm:flex-none">Arxiv</button>
-        <button onClick={() => { setShowTaskMenu(true); }}className="bg-blue-900 text-white px-6 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none">+ Ish qo'shish</button>
+<button onClick={() => { setView('archive'); setSelectedArchiveViewDate(null); }} 
+  className="bg-slate-200 text-slate-700 px-3 py-3 rounded-2xl cursor-pointer flex-1 sm:flex-none text-[9px]">
+  Ishlar arxivi
+</button>
+<button onClick={() => loadStationFaultArchive()} 
+  className="bg-red-100 text-red-700 px-3 py-3 rounded-2xl cursor-pointer flex-1 sm:flex-none text-[9px]">
+  Nosozliklar arxivi
+</button>
+<button onClick={() => { setShowTaskMenu(true); }}
+  className="bg-blue-900 text-white px-3 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none text-[9px]">
+  + Ish qo'shish
+</button>
       </div>
     </div>
     
@@ -972,8 +1084,8 @@ const groupedArchive = useMemo(() => {
     Hozircha aktiv ishlar yo'q
   </div>
 ) : (
-        activeTasks.map(task => (
-          <div key={task.id} className="bg-white p-6 rounded-4xl shadow-xl border-l-12 border-l-orange-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 animate-in slide-in-from-left duration-300">
+        activeTasks.map((task, index) => (
+  <div key={`active-${task.id}-${index}`} className="bg-white p-6 rounded-4xl shadow-xl border-l-12 border-l-orange-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 animate-in slide-in-from-left duration-300">
             <div className="space-y-2">
               <p className="font-black text-xl text-slate-800 tracking-tight leading-tight">{task.name}</p>
               <div className="flex flex-wrap gap-4 font-black text-[10px] uppercase tracking-tighter">
@@ -985,12 +1097,12 @@ const groupedArchive = useMemo(() => {
                 </span>
               </div>
             </div>
-            <button 
-              onClick={() => finishTask(task.id)} 
-              className="bg-green-600 text-white w-full sm:w-auto px-10 py-4 rounded-2xl font-black text-lg hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase tracking-tighter"
-            >
-              Tugatish
-            </button>
+<button 
+  onClick={() => setConfirmFinishTask(task.id)} 
+  className="bg-green-600 text-white w-full sm:w-auto px-10 py-4 rounded-2xl font-black text-lg hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase tracking-tighter"
+>
+  Tugatish
+</button>
           </div>
         ))
       )}
@@ -1005,39 +1117,52 @@ const groupedArchive = useMemo(() => {
     >
       <ArrowLeft size={16}/> Ortga
     </button>
-    <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 uppercase tracking-tighter leading-none">
-      <History className="text-blue-900" /> Arxiv: {selectedStation}
-    </h2>
 
-{archive.length === 0 ? (
+    <div className="flex items-center justify-between">
+      {selectedArchiveViewDate && (
+        <button
+          onClick={() => setSelectedArchiveViewDate(null)}
+          className="text-blue-900 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline"
+        >
+          <ArrowLeft size={14}/> Sanalar
+        </button>
+      )}
+      <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 uppercase tracking-tighter leading-none">
+        <History className="text-blue-900" /> Ishlar arxivi: {selectedStation}
+      </h2>
+    </div>
+
+    {archive.length === 0 ? (
       <div className="bg-white p-10 rounded-4xl text-center text-slate-400 font-black">
         Arxivda ishlar yo'q
       </div>
-    ) : (
+    ) : !selectedArchiveViewDate ? (
+      // SANALAR RO'YXATI
       groupedArchive.map(([sana, ishlar]) => (
-        <div key={sana} className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-900 text-white px-4 py-2 rounded-xl font-black text-sm">
-              📅 {new Date(sana).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-            </div>
-            <div className="h-px flex-1 bg-slate-200"></div>
-            <span className="text-xs font-black text-slate-400">{ishlar.length} ta ish</span>
-          </div>
-          {ishlar.map(item => (
-            <div key={item.id} className="bg-white p-6 rounded-[32px] border-l-8 border-l-green-600 shadow-md text-slate-800">
-              <p className="font-black text-lg tracking-tight leading-tight">{item.name}</p>
-              <div className="mt-3 flex flex-wrap gap-3 text-[10px] font-black uppercase tracking-tighter opacity-70">
-                <span className="text-blue-900">Bajardi: {item.worker_id}</span>
-                <span>Boshlandi: {formatFullDateTime(item.start_time)}</span>
-                <span>Tugadi: {formatFullDateTime(item.end_time)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <button
+          key={sana}
+          onClick={() => setSelectedArchiveViewDate(sana)}
+          className="w-full text-left p-4 rounded-2xl bg-white hover:bg-blue-900 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all shadow-sm"
+        >
+          <span className="font-black">📅 {new Date(sana).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+          <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{ishlar.length} ta ish</span>
+        </button>
       ))
+    ) : (
+      // TANLANGAN SANADAGI ISHLAR
+      <div className="space-y-3">
+        {(groupedArchive.find(([sana]) => sana === selectedArchiveViewDate)?.[1] || []).map(item => (
+          <div key={`archive-${item.id}`} className="bg-white p-6 rounded-[32px] border-l-8 border-l-green-600 shadow-md text-slate-800">
+            <p className="font-black text-lg tracking-tight leading-tight">{item.name}</p>
+            <div className="mt-3 flex flex-wrap gap-3 text-[10px] font-black uppercase tracking-tighter opacity-70">
+              <span className="text-blue-900">Bajardi: {item.worker_id}</span>
+              <span>Boshlandi: {formatFullDateTime(item.start_time)}</span>
+              <span>Tugadi: {formatFullDateTime(item.end_time)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     )}
-
-
   </div>
 )}
       </main>
@@ -1234,89 +1359,87 @@ const groupedArchive = useMemo(() => {
     </div>
   </div>
 )}
-      {showAdminPanel && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl h-[85vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
-            <div className="p-8 border-b-8 border-orange-200 flex justify-between items-center bg-orange-50/50">
-              <h2 className="text-3xl font-black text-orange-900 uppercase tracking-tighter flex items-center gap-3">
-                <ShieldCheck size={40}/> Ishchilarni boshqarish
-              </h2>
-              <button onClick={() => setShowAdminPanel(false)} className="bg-white p-3 rounded-full text-orange-600 hover:bg-orange-100 transition-all cursor-pointer shadow-md">
-                <X size={32}/>
-              </button>
-            </div>
-            <div className="p-8 flex-1 overflow-y-auto space-y-8 text-slate-800">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input placeholder="F.I.SH" className="p-4 border-2 rounded-2xl outline-none focus:border-orange-500 font-bold bg-slate-50 text-sm" value={newWorkerName} onChange={e => setNewWorkerName(e.target.value)} />
-                <input placeholder="ID raqami" className="p-4 border-2 rounded-2xl outline-none focus:border-orange-500 font-bold bg-slate-50 text-sm" value={newWorkerId} onChange={e => setNewWorkerId(e.target.value)} />
-                <input placeholder="Parol" className="p-4 border-2 rounded-2xl outline-none focus:border-orange-500 font-bold bg-slate-50 text-sm" value={newWorkerPass} onChange={e => setNewWorkerPass(e.target.value)} />
-                <button onClick={addWorker} className="bg-orange-600 text-white p-4 rounded-2xl font-black shadow-xl hover:bg-orange-700 transition active:scale-95 cursor-pointer uppercase tracking-widest">QO'SHISH</button>
-              </div>
-              <div className="bg-slate-50 rounded-3xl border-2 border-slate-100 overflow-hidden">
-                <table className="w-full text-left font-bold text-sm">
-<thead className="bg-orange-100 text-orange-900 uppercase text-xs">
-  <tr>
-    <th className="p-6">Foydalanuvchi</th>
-    <th className="p-6">ID raqami</th>
-    <th className="p-6">Parol</th>
-    <th className="p-6 text-right">Amallar</th>
-  </tr>
-</thead>
-                  <tbody className="divide-y-2 divide-orange-50 font-bold text-xs uppercase">
-                    {workersList.map((w) => (
-                      <tr key={w.id} className={`hover:bg-white transition-colors ${w.role !== 'worker' ? 'bg-orange-50/50' : ''}`}>
-                        <td className="p-6">
-                          {editingWorker?.id === w.id ? (
-                            <input className="p-2 border rounded w-full" value={editName} onChange={e => setEditName(e.target.value)} />
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              {w.full_name}
-                              {w.role === 'admin' && <span className="bg-red-600 text-white text-[8px] px-2 py-0.5 rounded-full">ADMIN</span>}
-                              {w.role === 'boss' && <span className="bg-blue-900 text-white text-[8px] px-2 py-0.5 rounded-full">BOSS</span>}
-                            </div>
-                          )}
-                        </td>
-<td className="p-6 font-mono text-orange-700">
-  {editingWorker?.id === w.id && w.role === 'worker' ? (
-    <input 
-      className="p-2 border rounded w-full font-mono" 
-      value={editId} 
-      placeholder="Yangi login ID" 
-      onChange={e => setEditId(e.target.value)} 
-    />
-  ) : w.worker_id}
-</td>
-<td className="p-6">
-  {editingWorker?.id === w.id && w.role === 'worker' ? (
-    <input 
-      className="p-2 border rounded w-full" 
-      value={editPass} 
-      placeholder="Yangi parol (bo'sh qolsa o'zgarmaydi)" 
-      onChange={e => setEditPass(e.target.value)} 
-    />
-  ) : '••••••'}
-</td>
-                        <td className="p-6 text-right flex justify-end gap-2">
-                          {editingWorker?.id === w.id ? (
-                            <button onClick={saveEdit} className="text-green-600 p-2 hover:bg-green-50 rounded-full cursor-pointer"><Save size={24}/></button>
-                          ) : (
-                            <button onClick={() => handleEditClick(w)} className="text-blue-600 p-2 hover:bg-blue-50 rounded-full cursor-pointer"><Edit3 size={24}/></button>
-                          )}
-                          {w.role === 'worker' ? (
-                            <button onClick={() => removeWorker(w)} className="text-red-500 p-2 hover:bg-red-50 rounded-full cursor-pointer"><Trash2 size={24}/></button>
-                          ) : (
-                            <div className="p-2"><ShieldCheck size={24} className="text-orange-400" /></div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+{showAdminPanel && (
+  <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3">
+    <div className="bg-white w-full max-w-2xl h-[90vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col">
+      
+      {/* HEADER */}
+      <div className="p-5 border-b-4 border-orange-200 flex justify-between items-center bg-orange-50">
+        <h2 className="text-lg font-black text-orange-900 uppercase flex items-center gap-2">
+          <ShieldCheck size={24}/> Ishchilar
+        </h2>
+        <button onClick={() => setShowAdminPanel(false)} className="bg-white p-2 rounded-full text-orange-600 cursor-pointer shadow">
+          <X size={24}/>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        
+        {/* YANGI ISHCHI QO'SHISH */}
+        <div className="bg-orange-50 p-4 rounded-2xl space-y-3">
+          <p className="font-black text-xs uppercase text-orange-700">Yangi ishchi qo'shish</p>
+          <input placeholder="F.I.SH" className="w-full p-3 border-2 rounded-xl outline-none focus:border-orange-500 font-bold bg-white text-sm" value={newWorkerName} onChange={e => setNewWorkerName(e.target.value)} />
+          <input placeholder="ID raqami" className="w-full p-3 border-2 rounded-xl outline-none focus:border-orange-500 font-bold bg-white text-sm" value={newWorkerId} onChange={e => setNewWorkerId(e.target.value)} />
+          <input placeholder="Parol" className="w-full p-3 border-2 rounded-xl outline-none focus:border-orange-500 font-bold bg-white text-sm" value={newWorkerPass} onChange={e => setNewWorkerPass(e.target.value)} />
+          <button onClick={addWorker} className="w-full bg-orange-600 text-white p-3 rounded-xl font-black cursor-pointer uppercase text-sm">QO'SHISH</button>
         </div>
-      )}
+
+        {/* ISHCHILAR RO'YXATI */}
+        <div className="space-y-3">
+          {workersList.map((w) => (
+            <div key={w.id} className={`bg-white border-2 rounded-2xl p-4 ${w.role !== 'worker' ? 'border-orange-200 bg-orange-50' : 'border-slate-100'}`}>
+              
+              {editingWorker?.id === w.id ? (
+                // TAHRIRLASH REJIMI
+                <div className="space-y-2">
+                  <input className="w-full p-2 border-2 rounded-xl text-sm font-bold outline-none focus:border-orange-500" placeholder="F.I.SH" value={editName} onChange={e => setEditName(e.target.value)} />
+                  {w.role === 'worker' && (
+                    <>
+                      <input className="w-full p-2 border-2 rounded-xl text-sm font-bold outline-none focus:border-orange-500 font-mono" placeholder="Yangi ID" value={editId} onChange={e => setEditId(e.target.value)} />
+                      <input className="w-full p-2 border-2 rounded-xl text-sm font-bold outline-none focus:border-orange-500" placeholder="Yangi parol (bo'sh qolsa o'zgarmaydi)" value={editPass} onChange={e => setEditPass(e.target.value)} />
+                    </>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={saveEdit} className="flex-1 bg-green-600 text-white p-2 rounded-xl font-black text-sm cursor-pointer flex items-center justify-center gap-1">
+                      <Save size={16}/> Saqlash
+                    </button>
+                    <button onClick={() => setEditingWorker(null)} className="flex-1 bg-slate-200 p-2 rounded-xl font-black text-sm cursor-pointer">
+                      Bekor
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // KO'RISH REJIMI
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-black text-sm">{w.full_name}</p>
+                      {w.role === 'admin' && <span className="bg-red-600 text-white text-[8px] px-2 py-0.5 rounded-full">ADMIN</span>}
+                      {w.role === 'boss' && <span className="bg-blue-900 text-white text-[8px] px-2 py-0.5 rounded-full">BOSS</span>}
+                    </div>
+                    <p className="font-mono text-orange-700 text-xs mt-1">{w.worker_id}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => handleEditClick(w)} className="text-blue-600 p-2 hover:bg-blue-50 rounded-full cursor-pointer">
+                      <Edit3 size={20}/>
+                    </button>
+                    {w.role === 'worker' ? (
+                      <button onClick={() => removeWorker(w)} className="text-red-500 p-2 hover:bg-red-50 rounded-full cursor-pointer">
+                        <Trash2 size={20}/>
+                      </button>
+                    ) : (
+                      <div className="p-2"><ShieldCheck size={20} className="text-orange-400"/></div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
 {showTaskMenu && (
   <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -1456,8 +1579,8 @@ return selectedBolim.ishlar.map((ish) => (
 )}
 
       {/* NOSOZLIK MODALI */}
-      {showFaultModal && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+{showFaultModal && (
+  <div className="fixed inset-0 bg-black/70 z-[150] flex items-center justify-center">
           <div className="bg-white w-full max-w-md p-8 rounded-3xl space-y-4">
             <h2 className="text-2xl font-black text-red-600 uppercase">
               Nosozlik sababi
@@ -1485,33 +1608,33 @@ return selectedBolim.ishlar.map((ish) => (
               />
             )}
 
-            <div className="flex gap-3">
-              <button
-                disabled={!faultReason || (faultReason === "Boshqa" && !customFaultReason)}
-                onClick={() => setConfirmFaultSend(true)}
-                className="flex-1 bg-red-600 text-white py-3 rounded-xl disabled:bg-gray-400"
-              >
-                Yuborish
-              </button>
-              <button
-  onClick={() => {
-    setShowFaultModal(false);
-    setFaultReason("");
-    setCustomFaultReason("");
-    setConfirmFaultSend(false);
-  }}
-  className="flex-1 bg-gray-200 py-3 rounded-xl"
->
-  Bekor qilish
-</button>
-            </div>
+<div className="flex gap-3">
+  <button
+    disabled={!faultReason || (faultReason === "Boshqa" && !customFaultReason)}
+    onClick={() => setConfirmFaultSend(true)}
+    className="flex-1 bg-red-600 text-white py-3 rounded-xl disabled:bg-gray-400 cursor-pointer"
+  >
+    Yuborish
+  </button>
+  <button
+    onClick={() => {
+      setShowFaultModal(false);
+      setFaultReason("");
+      setCustomFaultReason("");
+      setConfirmFaultSend(false);
+    }}
+    className="flex-1 bg-gray-200 py-3 rounded-xl font-bold cursor-pointer"
+  >
+    Ortga
+  </button>
+</div>
           </div>
         </div>
       )}
 
       {/* TASDIQLASH MODALI */}
-      {confirmFaultSend && (
-        <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center">
+{confirmFaultSend && (
+  <div className="fixed inset-0 bg-black/80 z-[160] flex items-center justify-center">
           <div className="bg-white p-8 rounded-3xl text-center max-w-sm space-y-4">
             <h3 className="text-xl font-black text-red-600">
               Nosozlik yuborilsinmi?
@@ -1533,7 +1656,42 @@ return selectedBolim.ishlar.map((ish) => (
           </div>
         </div>
       )}
-
+{confirmFinishTask && (
+  <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4">
+    <div className="bg-white p-8 rounded-3xl text-center max-w-sm w-full space-y-5 shadow-2xl">
+      <div className="bg-green-100 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
+        <CheckCircle size={32} className="text-green-600"/>
+      </div>
+      <h3 className="text-xl font-black text-slate-800">
+        Ish tugaganligi haqida telegram guruhga foto yubordingizmi?
+      </h3>
+      <label className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl cursor-pointer border-2 border-slate-100 hover:border-green-400 transition-all">
+        <input 
+          type="checkbox" 
+          checked={photoConfirmed}
+          onChange={e => setPhotoConfirmed(e.target.checked)}
+          className="w-5 h-5 accent-green-600 cursor-pointer"
+        />
+        <span className="font-bold text-sm text-slate-700">Ha, foto yubordim</span>
+      </label>
+      <div className="flex gap-3">
+        <button
+          onClick={() => finishTask(confirmFinishTask)}
+          disabled={!photoConfirmed}
+          className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-black disabled:bg-slate-300 disabled:cursor-not-allowed cursor-pointer transition-all"
+        >
+          Tugatish
+        </button>
+        <button
+          onClick={() => { setConfirmFinishTask(null); setPhotoConfirmed(false); }}
+          className="flex-1 bg-slate-200 py-3 rounded-2xl font-black cursor-pointer"
+        >
+          Bekor
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       {/* KATTA QIZIL OGOHLANTIRISH */}
 {showBigAlert && activeFaults.length > 0 && (() => {
   const lastFault = activeFaults[activeFaults.length - 1];
@@ -1614,6 +1772,163 @@ return selectedBolim.ishlar.map((ish) => (
         </button>
       </div>
 
+    </div>
+  </div>
+)}
+{showFaultArchive && (
+  <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
+      <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100">
+        <div>
+          {selectedFaultDate && (
+            <button onClick={() => setSelectedFaultDate(null)} className="text-blue-900 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline mb-1">
+              <ArrowLeft size={14}/> Sanalar
+            </button>
+          )}
+          <h2 className="text-xl font-black text-slate-800 uppercase">Nosozliklar Arxivi</h2>
+        </div>
+        <button onClick={() => { setShowFaultArchive(false); setSelectedFaultDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer">
+          <X size={24}/>
+        </button>
+      </div>
+      <div className="overflow-y-auto p-6 space-y-3">
+        {!selectedFaultDate ? (
+          faultArchiveDates.length === 0 ? (
+            <p className="text-center py-8 text-slate-400 font-bold">Arxiv bo'sh</p>
+          ) : (
+            faultArchiveDates.map(date => (
+              <button
+                key={date}
+                onClick={() => setSelectedFaultDate(date)}
+                className="w-full text-left p-4 rounded-2xl bg-slate-50 hover:bg-red-600 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all"
+              >
+                <span className="font-black">📅 {new Date(date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{faultArchiveGrouped[date].length} ta nosozlik</span>
+              </button>
+            ))
+          )
+        ) : (
+          faultArchiveGrouped[selectedFaultDate].map(f => {
+            const duration = f.resolved_at
+              ? Math.floor((new Date(f.resolved_at) - new Date(f.created_at)) / 60000)
+              : null;
+            return (
+              <div key={f.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-red-500">
+                <p className="font-black text-sm">{f.station}</p>
+                <p className="text-sm text-slate-600 mt-1">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
+                <div className="flex gap-3 mt-2 text-[10px] text-slate-500 font-bold">
+                  <span>⏱ Boshlandi: {formatFullDateTime(f.created_at)}</span>
+                  {f.resolved_at && <span>✅ Tugadi: {formatFullDateTime(f.resolved_at)}</span>}
+                  {duration && <span className="text-green-600">🕐 {duration} min</span>}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  </div>
+)}
+{showBossArchive && (
+  <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
+      <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100">
+        <h2 className="text-xl font-black text-blue-900 uppercase">{showBossArchive} — Arxiv</h2>
+        <button onClick={() => { setShowBossArchive(null); setSelectedArchiveDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer">
+          <X size={24}/>
+        </button>
+      </div>
+      <div className="overflow-y-auto p-6 space-y-3">
+        {!selectedArchiveDate ? (
+          bossArchiveDates.length === 0 ? (
+            <p className="text-center py-8 text-slate-400 font-bold">Arxiv bo'sh</p>
+          ) : (
+            bossArchiveDates.map(date => (
+              <button
+                key={date}
+                onClick={() => setSelectedArchiveDate(date)}
+                className="w-full text-left p-4 rounded-2xl bg-slate-50 hover:bg-blue-900 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all"
+              >
+                <span className="font-black">📅 {new Date(date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{bossArchive[date].length} ta ish</span>
+              </button>
+            ))
+          )
+        ) : (
+          <>
+            <button onClick={() => setSelectedArchiveDate(null)} className="text-blue-900 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline mb-2">
+              <ArrowLeft size={14}/> Sanalar
+            </button>
+            {bossArchive[selectedArchiveDate].map(task => (
+              <div key={task.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-green-600">
+                <p className="font-black text-sm">{task.name}</p>
+                <div className="flex gap-3 mt-1 text-[10px] text-slate-500 font-bold">
+                  <span>👤 {task.worker_id}</span>
+                  <span>⏱ {formatFullDateTime(task.end_time)}</span>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+{showStationFaultArchive && (
+  <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col max-h-[80vh]">
+      <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100">
+        <div>
+          {selectedStationFaultDate && (
+            <button onClick={() => setSelectedStationFaultDate(null)} className="text-red-700 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline mb-1">
+              <ArrowLeft size={14}/> Sanalar
+            </button>
+          )}
+          <h2 className="text-xl font-black text-red-700 uppercase">{selectedStation} — Nosozliklar arxivi</h2>
+        </div>
+        <button onClick={() => { setShowStationFaultArchive(false); setSelectedStationFaultDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer">
+          <X size={24}/>
+        </button>
+      </div>
+      <div className="overflow-y-auto p-6 space-y-3">
+        {!selectedStationFaultDate ? (
+          stationFaultArchiveDates.length === 0 ? (
+            <p className="text-center py-8 text-slate-400 font-bold">Nosozliklar yo'q</p>
+          ) : (
+            stationFaultArchiveDates.map(date => (
+              <button
+                key={date}
+                onClick={() => setSelectedStationFaultDate(date)}
+                className="w-full text-left p-4 rounded-2xl bg-slate-50 hover:bg-red-600 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all"
+              >
+                <span className="font-black">📅 {new Date(date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{stationFaultArchiveGrouped[date].length} ta nosozlik</span>
+              </button>
+            ))
+          )
+        ) : (
+          stationFaultArchiveGrouped[selectedStationFaultDate].map(f => {
+            const duration = f.resolved_at
+              ? Math.floor((new Date(f.resolved_at) - new Date(f.created_at)) / 60000)
+              : null;
+            return (
+              <div key={f.id} className={`p-4 rounded-2xl border-l-4 ${f.status === 'active' ? 'bg-red-50 border-l-red-500' : 'bg-slate-50 border-l-green-500'}`}>
+                <div className="flex justify-between items-start">
+                  <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
+                  <span className={`text-[9px] font-black px-2 py-1 rounded-full ${f.status === 'active' ? 'bg-red-600 text-white animate-pulse' : 'bg-green-100 text-green-700'}`}>
+                    {f.status === 'active' ? 'Aktiv' : 'Bartaraf etildi'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-3 mt-2 text-[10px] text-slate-500 font-bold">
+                  <span>⏱ Boshlandi: {formatFullDateTime(f.created_at)}</span>
+                  {f.resolved_at && <span>✅ Tugadi: {formatFullDateTime(f.resolved_at)}</span>}
+                  {duration && <span className="text-green-600">🕐 {duration} min</span>}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   </div>
 )}
