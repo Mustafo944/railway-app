@@ -119,12 +119,15 @@ const loadStationData = useCallback(async (station) => {
   setIsLoadingTasks(false);
 }, []);
   const loadFaultStats = async () => {
-    const { data } = await supabase
-      .from("faults")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) setFaultHistory(data);
-  };
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("faults")
+    .select("*")
+    .gte("created_at", today + "T00:00:00")
+    .lte("created_at", today + "T23:59:59")
+    .order("created_at", { ascending: false });
+  if (data) setFaultHistory(data);
+};
   const loadFaultArchive = async () => {
   const { data } = await supabase
     .from('faults')
@@ -339,10 +342,11 @@ useEffect(() => {
       return [...prev, fault];
     });
     setCurrentWorker(curr => {
-      if (curr?.role === "boss" || curr?.role === "admin") {
-        setShowBigAlert(true);
-        setTimeout(() => toast.error("🚨 NOSOZLIK KELIB TUSHDI!", { id: `fault-${fault.id}` }), 0);
-      } else if (curr?.role === "worker") {
+   if (curr?.role === "boss" || curr?.role === "admin") {
+  setShowBigAlert(true);
+  setTimeout(() => toast.error("🚨 NOSOZLIK KELIB TUSHDI!", { id: `fault-${fault.id}` }), 0);
+  setTimeout(() => playAlertSound(), 0);
+} else if (curr?.role === "worker") {
         setSelectedStation(s => {
           if (fault.station === s) {
             setTimeout(() => toast.error(`🚨 Nosozlik: ${fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}`, { id: `fault-${fault.id}` }), 0);
@@ -446,7 +450,27 @@ supabase.from('tasks').select('*')
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
+const playAlertSound = () => {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  
+  const beep = (freq, start, duration) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+    osc.start(ctx.currentTime + start);
+    osc.stop(ctx.currentTime + start + duration);
+  };
 
+  beep(880, 0, 0.3);
+  beep(660, 0.35, 0.3);
+  beep(880, 0.7, 0.3);
+  beep(660, 1.05, 0.5);
+};
 const handleLogin = async (e) => {
   e.preventDefault();
   setAuthError("");
@@ -673,9 +697,7 @@ const groupedArchive = useMemo(() => {
         <header className="bg-blue-900 text-white p-3 sticky top-0 z-10 shadow-lg">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="bg-white p-1 rounded-full shadow-md">
-                <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain rounded-full" />
-              </div>
+<img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
               <div className="flex flex-col leading-none">
                 <h1 className="font-black text-lg uppercase tracking-tighter flex items-center gap-2">
                   Railway
@@ -727,10 +749,8 @@ const groupedArchive = useMemo(() => {
       <main className="max-w-6xl mx-auto p-4 sm:p-6">
         {view === 'login' && (
           <div className="flex items-center justify-center min-h-[80vh]">
-            <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border-t-[12px] border-blue-900 text-center">
-              <div className="mb-6 inline-block bg-white p-2 rounded-full shadow-lg border border-slate-100">
-                <img src="/logo.png" alt="Logo" className="w-20 h-20 object-contain rounded-full" />
-              </div>
+            <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border-t-12px border-blue-900 text-center">
+<img src="/logo.png" alt="Logo" className="w-48 h-48 object-contain mb-6 mx-auto" />
               <h2 className="text-3xl font-black mb-8 text-slate-800 tracking-tighter uppercase">Kirish</h2>
               <form onSubmit={handleLogin} className="space-y-4">
                 <input 
@@ -1728,7 +1748,7 @@ return selectedBolim.ishlar.map((ish) => (
       
       {/* HEADER */}
       <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100 bg-white">
-        <h2 className="text-2xl font-black text-red-600">Nosozliklar statistikasi</h2>
+<h2 className="text-2xl font-black text-red-600">Bugungi nosozliklar</h2>
         <button
           onClick={() => setShowFaultStats(false)}
           className="bg-slate-100 p-2 rounded-full hover:bg-slate-200 cursor-pointer"
