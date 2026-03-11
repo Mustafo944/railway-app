@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import { toast, Toaster } from 'react-hot-toast';
 import { YILLIK_REJA } from './yillik_reja';
 import { TORT_HAFTALIK_REJA } from './tort_haftalik_reja';
+import Du46Journal from '../components/Du46Journal';
+import Shu2Journal from '../components/Shu2Journal';
 import { 
   MapPin, Plus, History, User, CheckCircle, ArrowLeft, 
   ShieldCheck, Trash2, X, Loader2, Eye, EyeOff, Clock, Edit3, Save,
@@ -76,6 +78,14 @@ const [stationFaultArchiveGrouped, setStationFaultArchiveGrouped] = useState({})
 const [stationFaultArchiveDates, setStationFaultArchiveDates] = useState([]);
 const [selectedStationFaultDate, setSelectedStationFaultDate] = useState(null);
 const [selectedArchiveViewDate, setSelectedArchiveViewDate] = useState(null);
+const [confirmResolve, setConfirmResolve] = useState(null);
+const [showDu46, setShowDu46] = useState(false);
+const [showShu2, setShowShu2] = useState(false);
+const [showJournalMenu, setShowJournalMenu] = useState(false);
+const [showDu46Archive, setShowDu46Archive] = useState(false);
+const [showShu2Archive, setShowShu2Archive] = useState(false);
+const [bossJournalStation, setBossJournalStation] = useState(null);
+const [bossJournalType, setBossJournalType] = useState(null); // 'du46' | 'shu2'
   const loadWorkers = useCallback(async () => {
     const { data } = await supabase.from('allowed_emails').select('*').order('role', { ascending: true });
     if (data) setWorkersList(data);
@@ -273,6 +283,25 @@ const deleteRejaBolim = async (bolimId) => {
     });
     return map;
   }, [allTasksForBoss]);
+const playAlertSound = () => {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const beep = (freq, start, duration) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+    osc.start(ctx.currentTime + start);
+    osc.stop(ctx.currentTime + start + duration);
+  };
+  beep(880, 0, 0.3);
+  beep(660, 0.35, 0.3);
+  beep(880, 0.7, 0.3);
+  beep(660, 1.05, 0.5);
+};
 
   // Taymer funksiyasi
   const getFaultTimer = (start) => {
@@ -450,27 +479,7 @@ supabase.from('tasks').select('*')
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
-const playAlertSound = () => {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  
-  const beep = (freq, start, duration) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = freq;
-    osc.type = 'square';
-    gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
-    osc.start(ctx.currentTime + start);
-    osc.stop(ctx.currentTime + start + duration);
-  };
 
-  beep(880, 0, 0.3);
-  beep(660, 0.35, 0.3);
-  beep(880, 0.7, 0.3);
-  beep(660, 1.05, 0.5);
-};
 const handleLogin = async (e) => {
   e.preventDefault();
   setAuthError("");
@@ -632,7 +641,8 @@ const sendFault = async () => {
       reason: faultReason,
       custom_reason: customFaultReason,
       status: "active",
-      created_at: new Date()
+      created_at: new Date(),
+      worker_name: currentWorker?.full_name  // ← QO'SHING
     });
 
   if (error) {
@@ -720,7 +730,7 @@ const groupedArchive = useMemo(() => {
   {isAdmin && (
     <button 
       onClick={() => { setShowAdminPanel(true); loadWorkers(); }} 
-      className="bg-orange-500 px-2 sm:px-4 py-1.5 rounded-lg font-black text-[9px] sm:text-[10px] cursor-pointer shadow-md uppercase transition-all"
+     className="bg-orange-500 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-black text-[10px] sm:text-xs cursor-pointer shadow-md uppercase transition-all"
     >
       ADMIN
     </button>
@@ -728,7 +738,7 @@ const groupedArchive = useMemo(() => {
   {isAdmin && (
     <button 
       onClick={() => { setShowRejaPanel(true); setRejaStep('main'); }}
-      className="bg-purple-600 px-2 sm:px-4 py-1.5 rounded-lg font-black text-[9px] sm:text-[10px] cursor-pointer shadow-md uppercase transition-all text-white"
+      className="bg-purple-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-black text-[10px] sm:text-xs cursor-pointer shadow-md uppercase transition-all text-white"
     >
       REJA
     </button>
@@ -740,7 +750,7 @@ const groupedArchive = useMemo(() => {
       setView('login'); 
       toast.success("Tizimdan chiqildi."); 
     }}
-    className="bg-red-600 px-2 sm:px-4 py-1.5 rounded-lg font-bold text-[9px] sm:text-xs cursor-pointer shadow-md transition-all"
+    className="bg-red-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] sm:text-xs cursor-pointer shadow-md transition-all"
   >
     Chiqish
   </button>
@@ -804,10 +814,11 @@ const groupedArchive = useMemo(() => {
             </div>
             <div>
               <p className="text-[10px] font-black uppercase opacity-70 leading-none mb-1 text-white">Faol nosozlik:</p>
-              <p className="font-black text-sm uppercase text-white leading-tight">
-                {fault.station} — {fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}
-              </p>
-              <p className="text-xs text-yellow-200 mt-1">⏱ {getFaultTimer(fault.created_at)}</p>
+<p className="font-black text-sm uppercase text-white leading-tight">
+  {fault.station} — {fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}
+</p>
+<p className="text-xs text-yellow-200 mt-0.5">👤 {fault.worker_name || "Noma'lum"}</p>
+<p className="text-xs text-yellow-200 mt-1">⏱ {getFaultTimer(fault.created_at)}</p>
             </div>
           </div>
           <button 
@@ -916,12 +927,18 @@ const groupedArchive = useMemo(() => {
     )}
   </div>
   <div className="flex items-center gap-2">
-    <button
-      onClick={() => loadBossArchive(station)}
-      className="text-[10px] font-black bg-slate-700 text-white px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:bg-slate-900"
-    >
-      <History size={12}/> Arxiv
-    </button>
+<button
+  onClick={() => loadBossArchive(station)}
+  className="text-[10px] font-black bg-slate-700 text-white px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:bg-slate-900"
+>
+  <History size={12}/> Arxiv
+</button>
+<button
+  onClick={() => setBossJournalStation(station)}
+  className="text-[10px] font-black bg-purple-700 text-white px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:bg-purple-900"
+>
+  📔 Jurnallar
+</button>
     <span className="text-[10px] font-black bg-blue-900 text-white px-3 py-1 rounded-full uppercase tracking-widest">
       Bugun: {sTasks.length} ta
     </span>
@@ -1017,15 +1034,23 @@ const groupedArchive = useMemo(() => {
 {view === 'dashboard' && (
   <div className="space-y-6">
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-      <button 
-        onClick={() => { setView('station'); setSelectedStation(''); localStorage.removeItem('railway_station'); }} 
-        className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
-      >
-        <ArrowLeft size={16}/> Bekatlar
-      </button>
+<div className="flex items-center gap-2">
+  <button 
+    onClick={() => { setView('station'); setSelectedStation(''); localStorage.removeItem('railway_station'); }} 
+    className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
+  >
+    <ArrowLeft size={16}/> Bekatlar
+  </button>
+{currentWorker?.role === 'worker' && (
+  <button onClick={() => setShowJournalMenu(true)}
+    className="bg-purple-700 text-white px-3 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none text-[9px] font-black uppercase">
+    📔 Jurnallar
+  </button>
+)}
+</div>
       
       {/* NOSOZLIK HOLATI - AGAR BU BEKATDA BO'LSA */}
-{activeFaults.some(f => f.station === selectedStation && f.status === "active") && (() => {
+{activeFaults.some(f => f.station === selectedStation) && (() => {
   const currentFault = activeFaults.find(f => f.station === selectedStation);
   return (
     <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -1035,30 +1060,20 @@ const groupedArchive = useMemo(() => {
     <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
   </span>
   <div className="flex flex-col">
-    <span className="text-[10px] font-black text-red-700 uppercase">
-      Bu bekatda nosozlik bor!
-    </span>
-    <span className="text-[10px] font-bold text-red-600">
-      {currentFault.reason === "Boshqa" ? currentFault.custom_reason : currentFault.reason}
-    </span>
+<span className="text-[10px] font-black text-red-700 uppercase">
+  Bu bekatda nosozlik bor!
+</span>
+<span className="text-[10px] font-bold text-red-600">
+  {currentFault.reason === "Boshqa" ? currentFault.custom_reason : currentFault.reason}
+</span>
+<span className="text-[10px] font-bold text-slate-600">
+  👤 {currentFault.worker_name || "Noma'lum"}
+</span>
   </div>
 </div>
       {currentWorker?.role === 'worker' && (
         <button
-          onClick={async () => {
-            if (window.confirm("Nosozlik bartaraf etildi. Tasdiqlaysizmi?")) {
-  const { error } = await supabase
-    .from("faults")
-    .update({ status: "resolved", resolved_at: new Date() })
-    .eq("id", currentFault.id);
-  if (!error) {
-    setActiveFaults(prev => prev.filter(f => f.id !== currentFault.id));
-    toast.success("Nosozlik bartaraf etildi!");
-  } else {
-    toast.error("Xatolik yuz berdi!");
-  }
-}
-          }}
+         onClick={() => setConfirmResolve(currentFault.id)}
           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1"
         >
           <CheckCircle size={14} /> Bartaraf etildi
@@ -1088,6 +1103,7 @@ const groupedArchive = useMemo(() => {
   className="bg-red-100 text-red-700 px-3 py-3 rounded-2xl cursor-pointer flex-1 sm:flex-none text-[9px]">
   Nosozliklar arxivi
 </button>
+
 <button onClick={() => { setShowTaskMenu(true); }}
   className="bg-blue-900 text-white px-3 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none text-[9px]">
   + Ish qo'shish
@@ -1680,6 +1696,169 @@ return selectedBolim.ishlar.map((ish) => (
           </div>
         </div>
       )}
+{showDu46 && (
+  <Du46Journal
+    station={selectedStation}
+    workerName={currentWorker?.full_name}
+    mode="form"
+    onClose={() => setShowDu46(false)}
+  />
+)}
+{showDu46Archive && (
+  <Du46Journal
+    station={selectedStation}
+    workerName={currentWorker?.full_name}
+    mode="archive"
+    onClose={() => setShowDu46Archive(false)}
+  />
+)}
+{showShu2 && (
+  <Shu2Journal
+    station={selectedStation}
+    workerName={currentWorker?.full_name}
+    mode="form"
+    onClose={() => setShowShu2(false)}
+  />
+)}
+{showShu2Archive && (
+  <Shu2Journal
+    station={selectedStation}
+    workerName={currentWorker?.full_name}
+    mode="archive"
+    onClose={() => setShowShu2Archive(false)}
+  />
+)}
+
+{showJournalMenu && (
+  <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl">
+      <div className="flex justify-between items-center px-6 py-4 border-b bg-purple-50">
+        <h2 className="font-black text-purple-900 uppercase">📔 Jurnallar</h2>
+        <button onClick={() => setShowJournalMenu(false)} className="bg-slate-100 p-2 rounded-full cursor-pointer">
+          <X size={20}/>
+        </button>
+      </div>
+      <div className="p-6 space-y-3">
+        <div className="border-2 border-blue-100 rounded-2xl overflow-hidden">
+          <p className="bg-blue-50 px-4 py-2 font-black text-blue-900 text-sm">📋 DU-46</p>
+          <div className="flex gap-2 p-3">
+            <button
+              onClick={() => { setShowJournalMenu(false); setShowDu46(true); }}
+              className="flex-1 bg-blue-900 text-white py-2 rounded-xl font-black text-xs cursor-pointer"
+            >
+              + Yangi yozuv
+            </button>
+            <button
+              onClick={() => { setShowJournalMenu(false); setShowDu46Archive(true); }}
+              className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-xl font-black text-xs cursor-pointer"
+            >
+              📂 Arxiv
+            </button>
+          </div>
+        </div>
+        <div className="border-2 border-green-100 rounded-2xl overflow-hidden">
+          <p className="bg-green-50 px-4 py-2 font-black text-green-900 text-sm">📒 SHU-2</p>
+          <div className="flex gap-2 p-3">
+            <button
+              onClick={() => { setShowJournalMenu(false); setShowShu2(true); }}
+              className="flex-1 bg-green-700 text-white py-2 rounded-xl font-black text-xs cursor-pointer"
+            >
+              + Yangi yozuv
+            </button>
+            <button
+              onClick={() => { setShowJournalMenu(false); setShowShu2Archive(true); }}
+              className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-xl font-black text-xs cursor-pointer"
+            >
+              📂 Arxiv
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+{bossJournalStation && !bossJournalType && (
+  <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl">
+      <div className="flex justify-between items-center px-6 py-4 border-b bg-purple-50">
+        <h2 className="font-black text-purple-900 uppercase">📔 Jurnallar — {bossJournalStation}</h2>
+        <button onClick={() => setBossJournalStation(null)} className="bg-slate-100 p-2 rounded-full cursor-pointer">
+          <X size={20}/>
+        </button>
+      </div>
+      <div className="p-6 space-y-3">
+        <button
+          onClick={() => setBossJournalType('du46')}
+          className="w-full bg-blue-900 text-white py-4 rounded-2xl font-black cursor-pointer flex items-center justify-center gap-2"
+        >
+          📋 DU-46 arxivi
+        </button>
+        <button
+          onClick={() => setBossJournalType('shu2')}
+          className="w-full bg-green-700 text-white py-4 rounded-2xl font-black cursor-pointer flex items-center justify-center gap-2"
+        >
+          📒 SHU-2 arxivi
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{bossJournalStation && bossJournalType === 'du46' && (
+  <Du46Journal
+    station={bossJournalStation}
+    workerName={currentWorker?.full_name}
+    mode="archive"
+    onClose={() => { setBossJournalType(null); setBossJournalStation(null); }}
+  />
+)}
+
+{bossJournalStation && bossJournalType === 'shu2' && (
+  <Shu2Journal
+    station={bossJournalStation}
+    workerName={currentWorker?.full_name}
+    mode="archive"
+    onClose={() => { setBossJournalType(null); setBossJournalStation(null); }}
+  />
+)}
+      {confirmResolve && (
+  <div className="fixed inset-0 bg-black/80 z-[170] flex items-center justify-center p-4">
+    <div className="bg-white p-8 rounded-3xl text-center max-w-sm w-full space-y-5 shadow-2xl">
+      <div className="bg-green-100 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
+        <CheckCircle size={32} className="text-green-600"/>
+      </div>
+      <h3 className="text-xl font-black text-slate-800">
+        Nosozlik bartaraf etildimi?
+      </h3>
+      <div className="flex gap-3">
+        <button
+          onClick={async () => {
+            const { error } = await supabase
+              .from("faults")
+              .update({ status: "resolved", resolved_at: new Date() })
+              .eq("id", confirmResolve);
+            if (!error) {
+              setActiveFaults(prev => prev.filter(f => f.id !== confirmResolve));
+              toast.success("Nosozlik bartaraf etildi!");
+            } else {
+              toast.error("Xatolik yuz berdi!");
+            }
+            setConfirmResolve(null);
+          }}
+          className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-black cursor-pointer"
+        >
+          Ha, tasdiqlash
+        </button>
+        <button
+          onClick={() => setConfirmResolve(null)}
+          className="flex-1 bg-slate-200 py-3 rounded-2xl font-black cursor-pointer"
+        >
+          Bekor
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 {confirmFinishTask && (
   <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4">
     <div className="bg-white p-8 rounded-3xl text-center max-w-sm w-full space-y-5 shadow-2xl">
@@ -1772,9 +1951,10 @@ return selectedBolim.ishlar.map((ish) => (
               : null;
             return (
               <div key={f.id} className="border p-4 rounded-xl">
-                <p className="font-bold">{f.station}</p>
-                <p>{f.reason === "Boshqa" ? f.custom_reason : f.reason}</p>
-                <p className="text-sm text-gray-500">Boshlangan: {formatFullDateTime(f.created_at)}</p>
+<p className="font-bold">{f.station}</p>
+<p className="text-xs text-blue-700 font-black">👤 {f.worker_name || "Noma'lum"}</p>
+<p>{f.reason === "Boshqa" ? f.custom_reason : f.reason}</p>
+<p className="text-sm text-gray-500">Boshlangan: {formatFullDateTime(f.created_at)}</p>
                 {f.resolved_at && (
                   <p className="text-sm text-gray-500">Tugagan: {formatFullDateTime(f.resolved_at)}</p>
                 )}
@@ -1838,8 +2018,9 @@ return selectedBolim.ishlar.map((ish) => (
               : null;
             return (
               <div key={f.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-red-500">
-                <p className="font-black text-sm">{f.station}</p>
-                <p className="text-sm text-slate-600 mt-1">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
+<p className="font-black text-sm">{f.station}</p>
+<p className="text-xs text-blue-700 font-black">👤 {f.worker_name || "Noma'lum"}</p>
+<p className="text-sm text-slate-600 mt-1">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
                 <div className="flex gap-3 mt-2 text-[10px] text-slate-500 font-bold">
                   <span>⏱ Boshlandi: {formatFullDateTime(f.created_at)}</span>
                   {f.resolved_at && <span>✅ Tugadi: {formatFullDateTime(f.resolved_at)}</span>}
