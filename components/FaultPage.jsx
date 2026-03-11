@@ -114,7 +114,7 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
         <button onClick={onBack} className="flex items-center gap-2 font-black text-blue-900 text-xs cursor-pointer hover:underline">
           <ArrowLeft size={16}/> Ortga
         </button>
-        <h2 className="text-lg font-black uppercase text-red-600">🚨 Nosozliklar — {station}</h2>
+        <h2 className="text-xs font-black uppercase text-red-600">🚨 Nosozliklar — {station}</h2>
         <button
           onClick={loadArchive}
           className="bg-slate-700 text-white px-3 py-2 rounded-xl font-black text-xs cursor-pointer"

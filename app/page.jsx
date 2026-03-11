@@ -1227,8 +1227,8 @@ const groupedArchive = useMemo(() => {
     </div>
     
 <div className="grid gap-4 pb-24 sm:pb-0">
-     <h3 className="font-black text-orange-600 flex items-center gap-2 text-xl uppercase tracking-widest leading-none">
-  <Clock size={24}/> {new Date().toLocaleDateString('uz-UZ')} — Bugungi ishlar ({activeTasks.length})
+<h3 className="font-black text-orange-600 flex items-center gap-2 text-sm uppercase tracking-widest leading-none">
+  <Clock size={16}/> {new Date().toLocaleDateString('uz-UZ')} — Bugungi ishlar ({activeTasks.length})
 </h3>
 {isLoadingTasks ? (
   <div className="bg-white p-10 rounded-4xl text-center">
@@ -1242,7 +1242,7 @@ const groupedArchive = useMemo(() => {
         activeTasks.map((task, index) => (
   <div key={`active-${task.id}-${index}`} className="bg-white p-6 rounded-4xl shadow-xl border-l-12 border-l-orange-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 animate-in slide-in-from-left duration-300">
             <div className="space-y-2">
-              <p className="font-black text-xl text-slate-800 tracking-tight leading-tight">{task.name}</p>
+              <p className="font-black text-sm text-slate-800 tracking-tight leading-tight">{task.name}</p>
               <div className="flex flex-wrap gap-4 font-black text-[10px] uppercase tracking-tighter">
                 <span className="bg-blue-900 text-white px-3 py-1 rounded-lg flex items-center gap-1 shadow-md">
                   <User size={12}/> {task.worker_id}
@@ -1254,7 +1254,7 @@ const groupedArchive = useMemo(() => {
             </div>
 <button 
   onClick={() => setConfirmFinishTask(task.id)} 
-  className="bg-green-600 text-white w-full sm:w-auto px-10 py-4 rounded-2xl font-black text-lg hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase tracking-tighter"
+  className="bg-green-600 text-white w-full sm:w-auto px-6 py-3 rounded-2xl font-black text-sm hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase tracking-tighter"
 >
   Tugatish
 </button>
