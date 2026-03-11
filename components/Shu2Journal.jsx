@@ -23,7 +23,7 @@ export default function Shu2Journal({ station, workerName, mode, onClose }) {
 
   useEffect(() => {
     if (mode === 'archive') loadData();
-  }, []);
+  }, [mode]); // mode o'zgarganda ham ishlasin
 
   const loadData = async () => {
     const { data } = await supabase
@@ -31,6 +31,7 @@ export default function Shu2Journal({ station, workerName, mode, onClose }) {
       .select('*')
       .eq('station', station)
       .order('created_at', { ascending: false });
+    
     if (data) {
       setList(data);
       const grouped = {};

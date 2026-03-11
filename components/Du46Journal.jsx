@@ -213,37 +213,43 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
               className="w-full p-3 border-2 rounded-xl outline-none focus:border-blue-600 font-bold text-sm mt-1" />
           </div>
 
-          <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase">Xabar berish</p>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-[9px] font-black text-slate-400">Oy/kun</label>
-                <input {...f('xabar_oy_kun')} placeholder="11.03" className={inputCls} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black text-slate-400">Soat</label>
-                <input {...f('xabar_soat')} placeholder="14:35" className={inputCls} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black text-slate-400">Usul</label>
-                <input {...f('xabar_usul')} placeholder="Telefon" className={inputCls} />
-              </div>
-            </div>
-          </div>
+{/* XABAR BERISH - O'ZGARTIRILDI */}
+<div className="bg-slate-50 p-3 rounded-2xl space-y-2">
+  <p className="text-[10px] font-black text-slate-400 uppercase">
+    📢 Distansiyaning tegishli xodimi qachon xabar topgan
+  </p>
+  <div className="grid grid-cols-3 gap-2">
+    <div>
+      <label className="text-[9px] font-black text-slate-400">Oy/kun</label>
+      <input {...f('xabar_oy_kun')} placeholder="11.03" className={inputCls} />
+    </div>
+    <div>
+      <label className="text-[9px] font-black text-slate-400">Soat</label>
+      <input {...f('xabar_soat')} placeholder="14:35" className={inputCls} />
+    </div>
+    <div>
+      <label className="text-[9px] font-black text-slate-400">Usul</label>
+      <input {...f('xabar_usul')} placeholder="Telefon" className={inputCls} />
+    </div>
+  </div>
+</div>
 
-          <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase">Kelish vaqti</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[9px] font-black text-slate-400">Oy/kun</label>
-                <input {...f('kelish_oy_kun')} placeholder="11.03" className={inputCls} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black text-slate-400">Soat</label>
-                <input {...f('kelish_soat')} placeholder="14:50" className={inputCls} />
-              </div>
-            </div>
-          </div>
+{/* KELISH VAQTI - O'ZGARTIRILDI */}
+<div className="bg-slate-50 p-3 rounded-2xl space-y-2">
+  <p className="text-[10px] font-black text-slate-400 uppercase">
+    🚶 Distansiyaning tegishli xodimi nosozlik joyiga qachon yetib keldi
+  </p>
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <label className="text-[9px] font-black text-slate-400">Oy/kun</label>
+      <input {...f('kelish_oy_kun')} placeholder="11.03" className={inputCls} />
+    </div>
+    <div>
+      <label className="text-[9px] font-black text-slate-400">Soat</label>
+      <input {...f('kelish_soat')} placeholder="14:50" className={inputCls} />
+    </div>
+  </div>
+</div>
 
           <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
             <p className="text-[10px] font-black text-slate-400 uppercase">Bartaraf etish</p>
