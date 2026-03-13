@@ -11,10 +11,12 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-
-export const metadata: Metadata = {
-  title: "Railway SHCH Buxoro",        // ← shu yerini o'zgartiring
-  description: "Railway monitoring app",
+export const metadata = {
+  title: 'SHCH Buxoro',
+  description: 'Buxoro temir yo\'l SHCH nazorat tizimi',
+  icons: {
+    icon: '/logo.png',
+  },
 };
 export default function RootLayout({
   children,

@@ -1,14 +1,24 @@
-// railway-app/components/modals/RejaPanel.jsx
+"use client"
 import { X, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 
 export default function RejaPanel({
-  rejaStep, rejaturi, rejaBolimlar, rejaSelectedBolim,
-  rejaIshlar, yangibolimNomi, yangiIsh, isRejaSubmitting,
-  onStepChange, onRejaTuriChange, onSelectBolim,
-  onYangiBolimNomiChange, onYangiIshChange,
-  onAddRejaBolim, onAddRejaIsh,
-  onDeleteRejaBolim, onDeleteRejaIsh,
-  onClose
+  // Data
+  rejaStep, setRejaStep,
+  rejaturi, setRejaTuri,
+  rejaBolimlar,
+  rejaSelectedBolim, setRejaSelectedBolim,
+  rejaIshlar,
+  yangibolimNomi, setYangiBolimNomi,
+  yangiIsh, setYangiIsh,
+  isRejaSubmitting,
+  // Actions
+  loadRejaBolimlar,
+  loadRejaIshlar,
+  addRejaBolim,
+  addRejaIsh,
+  deleteRejaIsh,
+  deleteRejaBolim,
+  onClose,
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
@@ -20,10 +30,10 @@ export default function RejaPanel({
             {rejaStep !== 'main' && (
               <button
                 onClick={() => {
-                  if (rejaStep === 'yangi_bolim') onStepChange('bolimlar');
-                  else if (rejaStep === 'ishlar') onStepChange('bolimlar');
-                  else if (rejaStep === 'yangi_ish') onStepChange('ishlar');
-                  else onStepChange('main');
+                  if (rejaStep === 'yangi_bolim') setRejaStep('bolimlar');
+                  else if (rejaStep === 'ishlar') setRejaStep('bolimlar');
+                  else if (rejaStep === 'yangi_ish') setRejaStep('ishlar');
+                  else setRejaStep('main');
                 }}
                 className="text-purple-700 font-black text-xs flex items-center gap-1 mb-1 cursor-pointer hover:underline"
               >
@@ -38,10 +48,7 @@ export default function RejaPanel({
               {rejaStep === 'yangi_ish' && "Yangi ish qo'shish"}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="bg-white p-3 rounded-full hover:bg-purple-100 cursor-pointer shadow"
-          >
+          <button onClick={onClose} className="bg-white p-3 rounded-full hover:bg-purple-100 cursor-pointer shadow">
             <X size={24}/>
           </button>
         </div>
@@ -49,11 +56,11 @@ export default function RejaPanel({
         {/* KONTENT */}
         <div className="overflow-y-auto p-6 space-y-3">
 
-          {/* MAIN */}
+          {/* BOSQICH 1: MAIN */}
           {rejaStep === 'main' && (
             <div className="flex flex-col gap-4">
               <button
-                onClick={() => { onRejaTuriChange('yillik'); onStepChange('bolimlar'); }}
+                onClick={() => { setRejaTuri('yillik'); loadRejaBolimlar('yillik'); setRejaStep('bolimlar'); }}
                 className="w-full text-left p-6 rounded-3xl bg-blue-900 text-white font-black flex justify-between items-center cursor-pointer shadow-lg"
               >
                 <div>
@@ -63,7 +70,7 @@ export default function RejaPanel({
                 <Plus size={24}/>
               </button>
               <button
-                onClick={() => { onRejaTuriChange('haftalik'); onStepChange('bolimlar'); }}
+                onClick={() => { setRejaTuri('haftalik'); loadRejaBolimlar('haftalik'); setRejaStep('bolimlar'); }}
                 className="w-full text-left p-6 rounded-3xl bg-green-700 text-white font-black flex justify-between items-center cursor-pointer shadow-lg"
               >
                 <div>
@@ -75,11 +82,11 @@ export default function RejaPanel({
             </div>
           )}
 
-          {/* BO'LIMLAR */}
+          {/* BOSQICH 2: BO'LIMLAR */}
           {rejaStep === 'bolimlar' && (
             <>
               <button
-                onClick={() => onStepChange('yangi_bolim')}
+                onClick={() => setRejaStep('yangi_bolim')}
                 className="w-full p-4 rounded-2xl border-2 border-dashed border-purple-300 text-purple-700 font-black text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-purple-50"
               >
                 <Plus size={18}/> Yangi bo'lim qo'shish
@@ -90,13 +97,13 @@ export default function RejaPanel({
                 rejaBolimlar.map((bolim) => (
                   <div key={bolim.id} className="w-full p-5 rounded-[20px] bg-slate-50 border-2 border-slate-100 flex justify-between items-center">
                     <button
-                      onClick={() => onSelectBolim(bolim)}
+                      onClick={() => { setRejaSelectedBolim(bolim); loadRejaIshlar(bolim.id); setRejaStep('ishlar'); }}
                       className="flex-1 text-left cursor-pointer"
                     >
                       <p className="font-black text-sm">{bolim.bolim}</p>
                     </button>
                     <button
-                      onClick={() => onDeleteRejaBolim(bolim.id)}
+                      onClick={() => deleteRejaBolim(bolim.id)}
                       className="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 cursor-pointer"
                     >
                       <Trash2 size={16}/>
@@ -107,17 +114,17 @@ export default function RejaPanel({
             </>
           )}
 
-          {/* YANGI BO'LIM */}
+          {/* BOSQICH 3: YANGI BO'LIM */}
           {rejaStep === 'yangi_bolim' && (
             <div className="space-y-4">
               <input
                 placeholder="Bo'lim nomi"
                 value={yangibolimNomi}
-                onChange={onYangiBolimNomiChange}
+                onChange={e => setYangiBolimNomi(e.target.value)}
                 className="w-full p-4 border-2 rounded-2xl outline-none focus:border-purple-600 font-bold bg-slate-50"
               />
               <button
-                onClick={onAddRejaBolim}
+                onClick={addRejaBolim}
                 disabled={isRejaSubmitting}
                 className="w-full bg-purple-600 text-white py-4 rounded-2xl font-black cursor-pointer disabled:opacity-50"
               >
@@ -126,11 +133,11 @@ export default function RejaPanel({
             </div>
           )}
 
-          {/* ISHLAR */}
+          {/* BOSQICH 4: ISHLAR */}
           {rejaStep === 'ishlar' && (
             <>
               <button
-                onClick={() => onStepChange('yangi_ish')}
+                onClick={() => setRejaStep('yangi_ish')}
                 className="w-full p-4 rounded-2xl border-2 border-dashed border-purple-300 text-purple-700 font-black text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-purple-50"
               >
                 <Plus size={18}/> Yangi ish qo'shish
@@ -148,7 +155,7 @@ export default function RejaPanel({
                       </div>
                     </div>
                     <button
-                      onClick={() => onDeleteRejaIsh(ish.id)}
+                      onClick={() => deleteRejaIsh(ish.id)}
                       className="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 cursor-pointer"
                     >
                       <Trash2 size={16}/>
@@ -159,35 +166,35 @@ export default function RejaPanel({
             </>
           )}
 
-          {/* YANGI ISH */}
+          {/* BOSQICH 5: YANGI ISH */}
           {rejaStep === 'yangi_ish' && (
             <div className="space-y-4">
               <input
                 placeholder="Ish nomi *"
                 value={yangiIsh.ish}
-                onChange={e => onYangiIshChange({...yangiIsh, ish: e.target.value})}
+                onChange={e => setYangiIsh({...yangiIsh, ish: e.target.value})}
                 className="w-full p-4 border-2 rounded-2xl outline-none focus:border-purple-600 font-bold bg-slate-50"
               />
               <input
                 placeholder="Davriylik (masalan: Oyiga 1 marta)"
                 value={yangiIsh.davriylik}
-                onChange={e => onYangiIshChange({...yangiIsh, davriylik: e.target.value})}
+                onChange={e => setYangiIsh({...yangiIsh, davriylik: e.target.value})}
                 className="w-full p-4 border-2 rounded-2xl outline-none focus:border-purple-600 font-bold bg-slate-50"
               />
               <input
                 placeholder="Bajaruvchi"
                 value={yangiIsh.bajaruvchi}
-                onChange={e => onYangiIshChange({...yangiIsh, bajaruvchi: e.target.value})}
+                onChange={e => setYangiIsh({...yangiIsh, bajaruvchi: e.target.value})}
                 className="w-full p-4 border-2 rounded-2xl outline-none focus:border-purple-600 font-bold bg-slate-50"
               />
               <input
                 placeholder="Jurnal"
                 value={yangiIsh.jurnal}
-                onChange={e => onYangiIshChange({...yangiIsh, jurnal: e.target.value})}
+                onChange={e => setYangiIsh({...yangiIsh, jurnal: e.target.value})}
                 className="w-full p-4 border-2 rounded-2xl outline-none focus:border-purple-600 font-bold bg-slate-50"
               />
               <button
-                onClick={onAddRejaIsh}
+                onClick={addRejaIsh}
                 disabled={isRejaSubmitting}
                 className="w-full bg-purple-600 text-white py-4 rounded-2xl font-black cursor-pointer disabled:opacity-50"
               >
@@ -195,6 +202,7 @@ export default function RejaPanel({
               </button>
             </div>
           )}
+
         </div>
       </div>
     </div>

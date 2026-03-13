@@ -229,32 +229,32 @@ export default function JournalPage({ station, workerName, onBack, supabase }) {
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Kamchilik bayoni *</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Ko'rik,tekshiruvlar taxlili,shuningdek topilgan kamchiliklar bayoni</label>
                 <textarea value={du46Form.kamchilik} onChange={e => setDu46Form({...du46Form, kamchilik: e.target.value})} rows={3} placeholder="Topilgan kamchilikni yozing..." className="w-full p-3 border-2 rounded-xl outline-none focus:border-blue-600 font-bold text-sm mt-1"/>
               </div>
               <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase">Xabar berish</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase">Distansiyaning tegishli xodimi qachon xabar topgan</p>
                 <div className="grid grid-cols-3 gap-2">
                   <div><label className="text-[9px] font-black text-slate-400">Oy/kun</label><input value={du46Form.xabar_oy_kun} onChange={e => setDu46Form({...du46Form, xabar_oy_kun: e.target.value})} placeholder="11.03" className={inputCls}/></div>
                   <div><label className="text-[9px] font-black text-slate-400">Soat</label><input value={du46Form.xabar_soat} onChange={e => setDu46Form({...du46Form, xabar_soat: e.target.value})} placeholder="14:35" className={inputCls}/></div>
-                  <div><label className="text-[9px] font-black text-slate-400">Usul</label><input value={du46Form.xabar_usul} onChange={e => setDu46Form({...du46Form, xabar_usul: e.target.value})} placeholder="Telefon" className={inputCls}/></div>
+                  <div><label className="text-[9px] font-black text-slate-400">Xabar berish usuli</label><input value={du46Form.xabar_usul} onChange={e => setDu46Form({...du46Form, xabar_usul: e.target.value})} placeholder="Telefon" className={inputCls}/></div>
                 </div>
               </div>
               <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase">Kelish vaqti</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase">Distansiyaning tegishli xodimi nosozlik yoki qurilma ishlamay qolgan joyiga qachon yetib keldi</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className="text-[9px] font-black text-slate-400">Oy/kun</label><input value={du46Form.kelish_oy_kun} onChange={e => setDu46Form({...du46Form, kelish_oy_kun: e.target.value})} placeholder="11.03" className={inputCls}/></div>
                   <div><label className="text-[9px] font-black text-slate-400">Soat</label><input value={du46Form.kelish_soat} onChange={e => setDu46Form({...du46Form, kelish_soat: e.target.value})} placeholder="14:50" className={inputCls}/></div>
                 </div>
               </div>
               <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase">Bartaraf etish</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase">Nosozlik yoki qurilma ishlamay qolishi qachon aniqlandi,nosozlikni bartaraf qilish sabablari</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className="text-[9px] font-black text-slate-400">Oy/kun</label><input value={du46Form.bartaraf_oy_kun} onChange={e => setDu46Form({...du46Form, bartaraf_oy_kun: e.target.value})} placeholder="11.03" className={inputCls}/></div>
                   <div><label className="text-[9px] font-black text-slate-400">Soat</label><input value={du46Form.bartaraf_soat} onChange={e => setDu46Form({...du46Form, bartaraf_soat: e.target.value})} placeholder="15:10" className={inputCls}/></div>
                 </div>
                 <div>
-                  <label className="text-[9px] font-black text-slate-400">Sabab va choralar</label>
+                  <label className="text-[11px] font-black text-slate-400">Nosozlik yoki qurilma ishlamay qolishi qachon aniqlandi,nosozlikni bartaraf qilish sabablari,ko'rilgan choralar,kim tomondan</label>
                   <textarea value={du46Form.bartaraf_sabab} onChange={e => setDu46Form({...du46Form, bartaraf_sabab: e.target.value})} rows={2} placeholder="Sabab..." className="w-full p-2 border-2 rounded-xl outline-none focus:border-blue-600 font-bold text-xs mt-1"/>
                 </div>
               </div>

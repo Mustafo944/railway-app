@@ -1,4 +1,4 @@
-// railway-app/components/modals/BigAlert.jsx
+"use client"
 import { ShieldCheck } from 'lucide-react';
 
 export default function BigAlert({ activeFaults, onClose }) {
@@ -7,7 +7,7 @@ export default function BigAlert({ activeFaults, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/90 z-100 flex items-center justify-center p-4">
-      <div className="bg-red-600 text-white p-10 rounded-[50px] text-center max-w-md shadow-[0_0_50px_rgba(220,38,38,0.5)] animate-in zoom-in-95 border-4 border-white relative">
+      <div className="bg-red-600 text-white p-10 rounded-[50px] text-center max-w-md shadow-[0_0_50px_rgba(220,38,38,0.5)] animate-in zoom-in-95 border-4 border-white">
         <div className="mb-4 flex justify-center">
           <div className="bg-white/20 p-6 rounded-full">
             <ShieldCheck size={80} className="animate-bounce" />

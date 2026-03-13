@@ -24,10 +24,20 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
   const [isSending, setIsSending] = useState(false);
   const [confirmResolveId, setConfirmResolveId] = useState(null);
 
-  useEffect(() => {
-    loadActiveFaults();
-  }, []);
-
+useEffect(() => {
+  const load = async () => {
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const { data } = await supabase
+      .from('faults')
+      .select('*')
+      .eq('station', station)
+      .gte('created_at', oneMonthAgo.toISOString())
+      .order('created_at', { ascending: false });
+    if (data) setActiveFaults(data);
+  };
+  if (station) load();
+}, [station]);
   const loadActiveFaults = async () => {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
@@ -162,7 +172,7 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
                       onClick={() => setConfirmResolveId(f.id)}
                       className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs font-black cursor-pointer ml-2 shrink-0"
                     >
-                      Tugatildi
+                      Bartaraf etildi
                     </button>
                   )}
                 </div>
