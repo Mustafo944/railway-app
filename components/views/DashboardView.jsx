@@ -4,13 +4,11 @@ import {
 } from 'lucide-react';
 
 export default function DashboardView({
-  // Data
   currentWorker,
   selectedStation,
   activeTasks,
   activeFaults,
   isLoadingTasks,
-  // Actions
   setView,
   setMenuView,
   setSelectedArchiveViewDate,
@@ -28,7 +26,6 @@ export default function DashboardView({
       {/* YUQORI QISM */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         
-        {/* ORTGA TUGMA */}
         <button
           onClick={() => {
             setMenuView('main');
@@ -39,7 +36,6 @@ export default function DashboardView({
           <ArrowLeft size={16}/> Ortga
         </button>
 
-        {/* NOSOZLIK HOLATI */}
         {currentFault && (
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <div className="flex items-center gap-2 bg-red-100 px-4 py-2 rounded-xl border border-red-300">
@@ -57,7 +53,7 @@ export default function DashboardView({
                 </span>
               </div>
             </div>
-            {currentWorker?.role === 'worker' && (
+            {currentWorker?.role !== 'boss' && currentWorker?.role !== 'admin' && (
               <button
                 onClick={() => setConfirmResolve(currentFault.id)}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1"
@@ -65,26 +61,20 @@ export default function DashboardView({
                 <CheckCircle size={14} /> Bartaraf etildi
               </button>
             )}
-            {(currentWorker?.role === 'boss' || currentWorker?.role === 'admin') && (
-              <div className="bg-orange-100 text-orange-800 px-4 py-2 rounded-xl text-xs font-bold border border-orange-300 flex items-center gap-1">
-                <AlertTriangle size={14} />
-                Sabab: {currentFault.reason === "Boshqa" ? currentFault.custom_reason : currentFault.reason}
-              </div>
-            )}
           </div>
         )}
 
-        {/* PASTKI TUGMALAR */}
-        <div className="fixed bottom-0 left-0 right-0 sm:static flex gap-1 font-black text-[9px] uppercase p-3 bg-white/95 backdrop-blur sm:p-0 sm:bg-transparent sm:ml-auto shadow-[0_-4px_20px_rgba(0,0,0,0.08)] sm:shadow-none">
+        {/* TUGMALAR — mobilda pastda, desktopda o'ngda */}
+        <div className="fixed bottom-0 left-0 right-0 sm:static flex gap-2 font-black uppercase p-3 bg-white/95 backdrop-blur sm:p-0 sm:bg-transparent sm:ml-auto shadow-[0_-4px_20px_rgba(0,0,0,0.08)] sm:shadow-none z-10">
           <button
             onClick={() => { setView('archive'); setSelectedArchiveViewDate(null); }}
-            className="bg-slate-200 text-slate-700 px-3 py-3 rounded-2xl cursor-pointer flex-1 sm:flex-none text-[9px]"
+            className="bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl cursor-pointer flex-1 sm:flex-none text-[10px]"
           >
-            Ishlar arxivi
+            📂 Ishlar arxivi
           </button>
           <button
             onClick={() => setShowTaskMenu(true)}
-            className="bg-blue-900 text-white px-3 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none text-[9px]"
+            className="bg-blue-900 text-white px-4 py-3 rounded-2xl shadow-xl cursor-pointer flex-1 sm:flex-none text-[10px]"
           >
             + Ish qo'shish
           </button>
@@ -109,24 +99,43 @@ export default function DashboardView({
           activeTasks.map((task, index) => (
             <div
               key={`active-${task.id}-${index}`}
-              className="bg-white p-6 rounded-4xl shadow-xl border-l-12 border-l-orange-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 animate-in slide-in-from-left duration-300"
+              className="bg-white p-5 rounded-3xl shadow-lg border-l-4 border-l-orange-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-in slide-in-from-left duration-300"
             >
-              <div className="space-y-2">
-                <p className="font-black text-sm text-slate-800 tracking-tight leading-tight">{task.name}</p>
-                <div className="flex flex-wrap gap-4 font-black text-[10px] uppercase tracking-tighter">
-                  <span className="bg-blue-900 text-white px-3 py-1 rounded-lg flex items-center gap-1 shadow-md">
-                    <User size={12}/> {task.worker_id}
+              <div className="space-y-2 flex-1">
+                {/* ISH NOMI */}
+                <p className="font-black text-sm text-slate-800 leading-tight">{task.name}</p>
+                
+                {/* TEGLAR */}
+                <div className="flex flex-wrap gap-2">
+                  <span className="bg-blue-900 text-white px-2 py-1 rounded-lg text-[9px] font-black flex items-center gap-1">
+                    <User size={10}/> {task.worker_id}
                   </span>
-                  <span className="bg-orange-100 text-orange-900 px-3 py-1 rounded-lg border border-orange-200 flex items-center gap-1">
-                    <Clock size={12}/> {formatFullDateTime(task.start_time)}
+                  <span className="bg-orange-100 text-orange-900 px-2 py-1 rounded-lg text-[9px] font-black border border-orange-200 flex items-center gap-1">
+                    <Clock size={10}/> {formatFullDateTime(task.start_time)}
                   </span>
+                  {task.bolim && (
+                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-lg text-[9px] font-black border border-purple-200">
+                      📁 {task.bolim}
+                    </span>
+                  )}
+                  {task.davriylik && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-lg text-[9px] font-black border border-green-200">
+                      🔄 {task.davriylik}
+                    </span>
+                  )}
+                  {task.jurnal && (
+                    <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-lg text-[9px] font-black border border-indigo-200">
+                      📔 {task.jurnal}
+                    </span>
+                  )}
                 </div>
               </div>
+
               <button
                 onClick={() => setConfirmFinishTask(task.id)}
-                className="bg-green-600 text-white w-full sm:w-auto px-6 py-3 rounded-2xl font-black text-sm hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase tracking-tighter"
+                className="bg-green-600 text-white w-full sm:w-auto px-5 py-3 rounded-2xl font-black text-sm hover:bg-green-700 transition active:scale-95 cursor-pointer uppercase"
               >
-                Tugatish
+                ✅ Tugatish
               </button>
             </div>
           ))

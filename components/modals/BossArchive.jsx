@@ -40,13 +40,35 @@ export default function BossArchive({
                 <ArrowLeft size={14}/> Sanalar
               </button>
               {bossArchive[selectedArchiveDate].map(task => (
-                <div key={task.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-green-600">
-                  <p className="font-black text-sm">{task.name}</p>
-                  <div className="flex gap-3 mt-1 text-[10px] text-slate-500 font-bold">
-                    <span>👤 {task.worker_id}</span>
-                    <span>⏱ {formatFullDateTime(task.end_time)}</span>
-                  </div>
-                </div>
+               <div key={task.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-green-600">
+  <p className="font-black text-sm">{task.name}</p>
+  <div className="mt-2 flex flex-wrap gap-2">
+    <span className="bg-blue-900 text-white px-2 py-1 rounded-lg text-[9px] font-black">
+      👤 {task.worker_id}
+    </span>
+    <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-[9px] font-black border border-orange-200">
+      🕐 {formatFullDateTime(task.start_time)}
+    </span>
+    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-lg text-[9px] font-black border border-green-200">
+      ✅ {formatFullDateTime(task.end_time)}
+    </span>
+    {task.bolim && (
+      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-lg text-[9px] font-black border border-purple-200">
+        📁 {task.bolim}
+      </span>
+    )}
+    {task.davriylik && (
+      <span className="bg-teal-100 text-teal-800 px-2 py-1 rounded-lg text-[9px] font-black border border-teal-200">
+        🔄 {task.davriylik}
+      </span>
+    )}
+    {task.jurnal && (
+      <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-lg text-[9px] font-black border border-indigo-200">
+        📔 {task.jurnal}
+      </span>
+    )}
+  </div>
+</div>
               ))}
             </>
           )}

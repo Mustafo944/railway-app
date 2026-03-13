@@ -62,18 +62,39 @@ export default function ArchiveView({
       ) : (
         // TANLANGAN SANADAGI ISHLAR
         <div className="space-y-3">
-          {(groupedArchive.find(([sana]) => sana === selectedArchiveViewDate)?.[1] || []).map(item => (
-            <div
-              key={`archive-${item.id}-${item.station}`}
-              className="bg-white p-6 rounded-4xl border-l-8 border-l-green-600 shadow-md text-slate-800"
-            >
-              <p className="font-black text-lg tracking-tight leading-tight">{item.name}</p>
-              <div className="mt-3 flex flex-wrap gap-3 text-[10px] font-black uppercase tracking-tighter opacity-70">
-                <span className="text-blue-900">Bajardi: {item.worker_id}</span>
-                <span>Boshlandi: {formatFullDateTime(item.start_time)}</span>
-                <span>Tugadi: {formatFullDateTime(item.end_time)}</span>
-              </div>
-            </div>
+{(groupedArchive.find(([sana]) => sana === selectedArchiveViewDate)?.[1] || []).map((item, index) => (
+<div
+  key={`archive-${item.id}-${index}`}
+  className="bg-white p-5 rounded-3xl border-l-4 border-l-green-600 shadow-md text-slate-800"
+>
+  <p className="font-black text-sm leading-tight">{item.name}</p>
+  <div className="mt-2 flex flex-wrap gap-2">
+    <span className="bg-blue-900 text-white px-2 py-1 rounded-lg text-[9px] font-black">
+      👤 {item.worker_id}
+    </span>
+    <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-[9px] font-black border border-orange-200">
+      🕐 {formatFullDateTime(item.start_time)}
+    </span>
+    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-lg text-[9px] font-black border border-green-200">
+      ✅ {formatFullDateTime(item.end_time)}
+    </span>
+    {item.bolim && (
+      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-lg text-[9px] font-black border border-purple-200">
+        📁 {item.bolim}
+      </span>
+    )}
+    {item.davriylik && (
+      <span className="bg-teal-100 text-teal-800 px-2 py-1 rounded-lg text-[9px] font-black border border-teal-200">
+        🔄 {item.davriylik}
+      </span>
+    )}
+    {item.jurnal && (
+      <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-lg text-[9px] font-black border border-indigo-200">
+        📔 {item.jurnal}
+      </span>
+    )}
+  </div>
+</div>
           ))}
         </div>
       )}

@@ -193,29 +193,29 @@ const hasFault = activeFaults.some(f =>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-end">
-<button
-  onClick={() => loadBossArchive(station)}
-  className="text-[8px] sm:text-[10px] font-black bg-slate-700 text-white px-2 sm:px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:bg-slate-900 whitespace-nowrap"
->
-  <History size={10} /> Ishlar arxivi
-</button>
-<button
-  onClick={() => setBossStationWorkers(station)}
-  className="text-[8px] sm:text-[10px] font-black bg-green-700 text-white px-2 sm:px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:bg-green-900 whitespace-nowrap"
->
-  👥 Ishchilar ro'yxati
-</button>
-                  <button
-                    onClick={() => setBossJournalStation(station)}
-                    className="text-[8px] sm:text-[10px] font-black bg-purple-700 text-white px-2 sm:px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 cursor-pointer hover:bg-purple-900 whitespace-nowrap"
-                  >
-                    📔 Jurnallar
-                  </button>
-                  <span className="text-[8px] sm:text-[10px] font-black bg-blue-900 text-white px-2 sm:px-3 py-1 rounded-full uppercase tracking-widest whitespace-nowrap">
-                    {sTasks.length} ta
-                  </span>
-                </div>
+                <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto justify-end mt-1 sm:mt-0">
+  <button
+    onClick={() => loadBossArchive(station)}
+    className="text-[8px] font-black bg-slate-700 text-white px-2 py-1 rounded-lg uppercase flex items-center gap-1 cursor-pointer hover:bg-slate-900"
+  >
+    <History size={9} /> Ishlar arxivi
+  </button>
+  <button
+    onClick={() => setBossStationWorkers(station)}
+    className="text-[8px] font-black bg-green-700 text-white px-2 py-1 rounded-lg uppercase flex items-center gap-1 cursor-pointer hover:bg-green-900"
+  >
+    👥 Ishchilar
+  </button>
+  <button
+    onClick={() => setBossJournalStation(station)}
+    className="text-[8px] font-black bg-purple-700 text-white px-2 py-1 rounded-lg uppercase flex items-center gap-1 cursor-pointer hover:bg-purple-900"
+  >
+    📔 Jurnal
+  </button>
+  <span className="text-[8px] font-black bg-blue-900 text-white px-2 py-1 rounded-lg uppercase">
+    {sTasks.length} ta
+  </span>
+</div>
               </div>
 
               {/* ISHLAR JADVALI */}

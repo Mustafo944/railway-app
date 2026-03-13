@@ -723,14 +723,18 @@ const { error } = await supabase
 
 const formatFullDateTime = (isoString) => {
   if (!isoString) return "--:--";
-  const date = new Date(isoString);
-  const utc5 = new Date(date.getTime() + 5 * 60 * 60 * 1000);
-  return utc5.toLocaleString('uz-UZ', {
+  // UTC sifatida majburan parse qilish
+  const str = isoString.endsWith('Z') || isoString.includes('+') 
+    ? isoString 
+    : isoString + 'Z';
+  const date = new Date(str);
+  return date.toLocaleString('uz-UZ', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'Asia/Tashkent'
   });
 };
 const groupedArchive = useMemo(() => {

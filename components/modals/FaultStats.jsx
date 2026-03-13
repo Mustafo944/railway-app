@@ -16,9 +16,16 @@ export default function FaultStats({ faultHistory, formatFullDateTime, onClose }
             <p className="text-center py-8 text-gray-500">Hozircha nosozliklar yo'q</p>
           ) : (
             faultHistory.map(f => {
-              const duration = f.resolved_at
-                ? Math.floor((new Date(f.resolved_at) - new Date(f.created_at)) / 60000)
-                : null;
+const getDuration = (created, resolved) => {
+  const diff = new Date(resolved) - new Date(created);
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h > 0) return `${h} soat ${m} min ${s} s`;
+  if (m > 0) return `${m} min ${s} s`;
+  return `${s} s`;
+};
+const duration = f.resolved_at ? getDuration(f.created_at, f.resolved_at) : null;
               return (
                 <div key={f.id} className="border p-4 rounded-xl">
                   <p className="font-bold">{f.station}</p>
@@ -26,7 +33,7 @@ export default function FaultStats({ faultHistory, formatFullDateTime, onClose }
                   <p>{f.reason === "Boshqa" ? f.custom_reason : f.reason}</p>
                   <p className="text-sm text-gray-500">Boshlangan: {formatFullDateTime(f.created_at)}</p>
                   {f.resolved_at && <p className="text-sm text-gray-500">Tugagan: {formatFullDateTime(f.resolved_at)}</p>}
-                  {duration && <p className="text-green-600 font-bold mt-1">Bartaraf etish vaqti: {duration} min</p>}
+             {duration && <p className="text-green-600 font-bold mt-1">⏱ Bartaraf etish vaqti: {duration}</p>}
                   {!f.resolved_at && <p className="text-red-600 font-bold mt-1">Aktiv (davom etmoqda)</p>}
                 </div>
               );

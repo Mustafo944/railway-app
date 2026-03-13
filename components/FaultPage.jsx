@@ -11,6 +11,18 @@ const FAULT_REASONS = [
   "Boshqa"
 ];
 
+const getDuration = (created, resolved) => {
+  const c = created.endsWith('Z') || created.includes('+') ? created : created + 'Z';
+  const r = resolved.endsWith('Z') || resolved.includes('+') ? resolved : resolved + 'Z';
+  const diff = new Date(r) - new Date(c);
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h > 0) return `${h} soat ${m} min ${s} s`;
+  if (m > 0) return `${m} min ${s} s`;
+  return `${s} s`;
+};
+
 export default function FaultPage({ station, workerName, onBack, supabase, formatFullDateTime }) {
   const [activeFaults, setActiveFaults] = useState([]);
   const [showArchive, setShowArchive] = useState(false);
@@ -23,21 +35,28 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
   const [customReason, setCustomReason] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [confirmResolveId, setConfirmResolveId] = useState(null);
+  const [tick, setTick] = useState(0);
 
-useEffect(() => {
-  const load = async () => {
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const { data } = await supabase
-      .from('faults')
-      .select('*')
-      .eq('station', station)
-      .gte('created_at', oneMonthAgo.toISOString())
-      .order('created_at', { ascending: false });
-    if (data) setActiveFaults(data);
-  };
-  if (station) load();
-}, [station]);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      const { data } = await supabase
+        .from('faults')
+        .select('*')
+        .eq('station', station)
+        .gte('created_at', oneMonthAgo.toISOString())
+        .order('created_at', { ascending: false });
+      if (data) setActiveFaults(data);
+    };
+    if (station) load();
+  }, [station]);
+
   const loadActiveFaults = async () => {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
@@ -73,13 +92,13 @@ useEffect(() => {
   const sendFault = async () => {
     if (!faultReason) return toast.error("Sababni tanlang!");
     setIsSending(true);
-const { error } = await supabase.from('faults').insert({
-  station,
-  reason: faultReason,
-  custom_reason: customReason,
-  status: 'active',
-  worker_name: workerName
-});
+    const { error } = await supabase.from('faults').insert({
+      station,
+      reason: faultReason,
+      custom_reason: customReason,
+      status: 'active',
+      worker_name: workerName
+    });
     if (!error) {
       toast.success("Nosozlik yuborildi!");
       setShowSendModal(false);
@@ -96,7 +115,7 @@ const { error } = await supabase.from('faults').insert({
   const resolveFault = async (id) => {
     const { error } = await supabase
       .from('faults')
-      .update({ status: 'resolved', resolved_at: new Date() })
+      .update({ status: 'resolved', resolved_at: new Date().toISOString() })
       .eq('id', id);
     if (!error) {
       toast.success("Nosozlik bartaraf etildi!");
@@ -109,10 +128,13 @@ const { error } = await supabase.from('faults').insert({
 
   const getFaultTimer = (start) => {
     if (!start) return '';
-    const diff = Date.now() - new Date(start).getTime();
-    const m = Math.floor(diff / 60000);
+    const str = start.endsWith('Z') || start.includes('+') ? start : start + 'Z';
+    const diff = Date.now() - new Date(str).getTime();
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
     const s = Math.floor((diff % 60000) / 1000);
-    return `${m} min ${s} s`;
+    if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   };
 
   return (
@@ -124,10 +146,7 @@ const { error } = await supabase.from('faults').insert({
           <ArrowLeft size={16}/> Ortga
         </button>
         <h2 className="text-xs font-black uppercase text-red-600">🚨 Nosozliklar — {station}</h2>
-        <button
-          onClick={loadArchive}
-          className="bg-slate-700 text-white px-3 py-2 rounded-xl font-black text-xs cursor-pointer"
-        >
+        <button onClick={loadArchive} className="bg-slate-700 text-white px-3 py-2 rounded-xl font-black text-xs cursor-pointer">
           📂 Arxiv
         </button>
       </div>
@@ -148,36 +167,33 @@ const { error } = await supabase.from('faults').insert({
         </div>
       ) : (
         <div className="space-y-3">
-          {activeFaults.map(f => {
-            const duration = f.resolved_at
-              ? Math.floor((new Date(f.resolved_at) - new Date(f.created_at)) / 60000)
-              : null;
-            return (
-              <div key={f.id} className={`p-4 rounded-2xl border-l-4 ${f.status === 'active' ? 'bg-red-50 border-l-red-500' : 'bg-green-50 border-l-green-500'}`}>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
-                    <p className="text-[10px] font-bold text-blue-700 mt-0.5">👤 {f.worker_name || "Noma'lum"}</p>
-                    <p className="text-[10px] font-bold text-slate-500 mt-0.5">⏱ {formatFullDateTime(f.created_at)}</p>
-                    {f.status === 'active' && (
-                      <p className="text-[10px] font-black text-red-600 mt-0.5">🔴 Aktiv: {getFaultTimer(f.created_at)}</p>
-                    )}
-                    {duration && (
-                      <p className="text-[10px] font-black text-green-600 mt-0.5">✅ Bartaraf etildi: {duration} min</p>
-                    )}
-                  </div>
+          {activeFaults.map(f => (
+            <div key={f.id} className={`p-4 rounded-2xl border-l-4 ${f.status === 'active' ? 'bg-red-50 border-l-red-500' : 'bg-green-50 border-l-green-500'}`}>
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
+                  <p className="text-[10px] font-bold text-blue-700 mt-0.5">👤 {f.worker_name || "Noma'lum"}</p>
+                  <p className="text-[10px] font-bold text-slate-500 mt-0.5">🕐 {formatFullDateTime(f.created_at)}</p>
                   {f.status === 'active' && (
-                    <button
-                      onClick={() => setConfirmResolveId(f.id)}
-                      className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs font-black cursor-pointer ml-2 shrink-0"
-                    >
-                      Bartaraf etildi
-                    </button>
+                    <p className="text-[10px] font-black text-red-600 mt-0.5">🔴 Aktiv: {getFaultTimer(f.created_at)}</p>
+                  )}
+                  {f.resolved_at && (
+                    <p className="text-[10px] font-black text-green-600 mt-0.5">
+                      ✅ Bartaraf etildi: {getDuration(f.created_at, f.resolved_at)}
+                    </p>
                   )}
                 </div>
+                {f.status === 'active' && (
+                  <button
+                    onClick={() => setConfirmResolveId(f.id)}
+                    className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs font-black cursor-pointer ml-2 shrink-0"
+                  >
+                    Bartaraf etildi
+                  </button>
+                )}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 
@@ -217,22 +233,19 @@ const { error } = await supabase.from('faults').insert({
                   ))
                 )
               ) : (
-                archiveGrouped[selectedDate].map(f => {
-                  const duration = f.resolved_at
-                    ? Math.floor((new Date(f.resolved_at) - new Date(f.created_at)) / 60000)
-                    : null;
-                  return (
-                    <div key={f.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-red-500">
-                      <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
-                      <p className="text-[10px] font-bold text-blue-700">👤 {f.worker_name || "Noma'lum"}</p>
-                      <div className="flex flex-wrap gap-3 mt-1 text-[10px] text-slate-500 font-bold">
-                        <span>⏱ {formatFullDateTime(f.created_at)}</span>
-                        {f.resolved_at && <span>✅ {formatFullDateTime(f.resolved_at)}</span>}
-                        {duration && <span className="text-green-600">🕐 {duration} min</span>}
-                      </div>
+                archiveGrouped[selectedDate].map(f => (
+                  <div key={f.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-red-500">
+                    <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
+                    <p className="text-[10px] font-bold text-blue-700">👤 {f.worker_name || "Noma'lum"}</p>
+                    <div className="flex flex-wrap gap-3 mt-1 text-[10px] text-slate-500 font-bold">
+                      <span>⏱ {formatFullDateTime(f.created_at)}</span>
+                      {f.resolved_at && <span>✅ {formatFullDateTime(f.resolved_at)}</span>}
+                      {f.resolved_at && (
+                        <span className="text-green-600">🕐 {getDuration(f.created_at, f.resolved_at)}</span>
+                      )}
                     </div>
-                  );
-                })
+                  </div>
+                ))
               )}
             </div>
           </div>
