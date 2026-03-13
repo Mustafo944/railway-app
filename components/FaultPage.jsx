@@ -73,14 +73,13 @@ useEffect(() => {
   const sendFault = async () => {
     if (!faultReason) return toast.error("Sababni tanlang!");
     setIsSending(true);
-    const { error } = await supabase.from('faults').insert({
-      station,
-      reason: faultReason,
-      custom_reason: customReason,
-      status: 'active',
-      created_at: new Date(),
-      worker_name: workerName
-    });
+const { error } = await supabase.from('faults').insert({
+  station,
+  reason: faultReason,
+  custom_reason: customReason,
+  status: 'active',
+  worker_name: workerName
+});
     if (!error) {
       toast.success("Nosozlik yuborildi!");
       setShowSendModal(false);

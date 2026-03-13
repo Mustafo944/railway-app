@@ -1,5 +1,5 @@
 "use client"
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   MapPin, History, ShieldCheck, BarChart, AlertTriangle, Clock, CheckCircle, X, User
 } from 'lucide-react';
@@ -21,7 +21,14 @@ export default function BossDashboard({
   setShowFaultStats,
   setShowBigAlert,
 }) {
-  const [bossStationWorkers, setBossStationWorkers] = useState(null);
+const [tick, setTick] = useState(0);
+
+useEffect(() => {
+  const interval = setInterval(() => setTick(t => t + 1), 1000);
+  return () => clearInterval(interval);
+}, []);
+
+const [bossStationWorkers, setBossStationWorkers] = useState(null);
 
   const stationWorkers = bossStationWorkers
     ? [...(workersList || [])].filter(w => {
@@ -62,7 +69,19 @@ export default function BossDashboard({
   {fault.station?.split(',').map(s => s.trim()).join(' | ')} — {fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}
 </p>
                     <p className="text-xs text-yellow-200 mt-0.5">👤 {fault.worker_name || "Noma'lum"}</p>
-                    <p className="text-xs text-yellow-200 mt-1">⏱ {getFaultTimer(fault.created_at)}</p>
+<p className="text-xs text-yellow-200 mt-1">
+  ⏱ {(() => {
+    if (!fault.created_at) return "00:00";
+const created = new Date(fault.created_at);
+const now = new Date();
+const diff = now.getTime() - created.getTime() - (5 * 60 * 60 * 1000);
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  })()}
+</p>
                   </div>
                 </div>
                 <button

@@ -345,14 +345,16 @@ const playAlertSound = () => {
 };
 
   // Taymer funksiyasi
-  const getFaultTimer = (start) => {
-    if (!start) return "0 min 0 s";
-    const diff = Date.now() - new Date(start).getTime();
-    const m = Math.floor(diff / 60000);
-    const s = Math.floor((diff % 60000) / 1000);
-    return `${m} min ${s} s`;
-  };
-
+const getFaultTimer = (start) => {
+  if (!start) return "0 s";
+  const diff = Date.now() - new Date(start).getTime();
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h > 0) return `${h} soat ${m} min ${s} s`;
+  if (m > 0) return `${m} min ${s} s`;
+  return `${s} s`;
+};
   // REALTIME OBUNA QISMI
 useEffect(() => {
   const channelName = `tasks-live-${Date.now()}`;
@@ -403,8 +405,11 @@ useEffect(() => {
       return [...prev, fault];
     });
     setCurrentWorker(curr => {
-      if (curr?.role === "boss" || curr?.role === "admin") {
-        setTimeout(() => setShowBigAlert(true), 0);   // ← setTimeout qo'shildi
+if (curr?.role === "boss" || curr?.role === "admin") {
+  const seenFaults = JSON.parse(localStorage.getItem('seen_faults') || '[]');
+  if (!seenFaults.includes(fault.id)) {
+    setShowBigAlert(true);
+  }
         setTimeout(() => toast.error("🚨 NOSOZLIK KELIB TUSHDI!", { id: `fault-${fault.id}` }), 0);
         setTimeout(() => playAlertSound(), 0);
       } else if (curr?.role === "worker") {
@@ -470,9 +475,18 @@ supabase
   .select('*')
   .eq('status', 'active')
   .order('created_at', { ascending: false })
- .then(({ data: faultData }) => {
-  if (faultData && faultData.length > 0) setActiveFaults(faultData);
-});
+  .then(({ data: faultData }) => {
+    if (faultData) {
+      setActiveFaults(faultData);
+      if (faultData.length > 0) {
+        const seenFaults = JSON.parse(localStorage.getItem('seen_faults') || '[]');
+        const hasNew = faultData.some(f => !seenFaults.includes(f.id));
+        if (hasNew) {
+          setTimeout(() => setShowBigAlert(true), 0);
+        }
+      }
+    }
+  });
         if (data.role === 'boss' || data.role === 'admin') {
   setView('boss_dashboard');
 const today = new Date().toISOString().slice(0, 10);
@@ -672,18 +686,15 @@ const finishTask = async (taskId) => {
 const sendFault = async () => {
   if (isSubmitting) return;
   setIsSubmitting(true);
-  
-  const { error } = await supabase
-    .from("faults")
-    .insert({
-      station: selectedStation,
-      reason: faultReason,
-      custom_reason: customFaultReason,
-      status: "active",
-      created_at: new Date(),
-      worker_name: currentWorker?.full_name  // ← QO'SHING
-    });
-
+const { error } = await supabase
+  .from("faults")
+  .insert({
+    station: selectedStation,
+    reason: faultReason,
+    custom_reason: customFaultReason,
+    status: "active",
+    worker_name: currentWorker?.full_name
+  });
   if (error) {
     toast.error("Nosozlik yuborishda xato!");
     setIsSubmitting(false);
@@ -1191,9 +1202,16 @@ editStation={editStation} setEditStation={setEditStation}
 )}
       {/* KATTA QIZIL OGOHLANTIRISH */}
 {showBigAlert && activeFaults.length > 0 && (
-  <BigAlert activeFaults={activeFaults} onClose={() => setShowBigAlert(false)} />
+  <BigAlert 
+    activeFaults={activeFaults} 
+    onClose={() => {
+      const seenFaults = JSON.parse(localStorage.getItem('seen_faults') || '[]');
+      const newSeen = [...new Set([...seenFaults, ...activeFaults.map(f => f.id)])];
+      localStorage.setItem('seen_faults', JSON.stringify(newSeen));
+      setShowBigAlert(false);
+    }} 
+  />
 )}
-
       {/* NOSOZLIKLAR STATISTIKA MODALI */}
 {showFaultStats && (
   <FaultStats
