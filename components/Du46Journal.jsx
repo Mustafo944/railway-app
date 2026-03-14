@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'react-hot-toast';
 import { X, ArrowLeft } from 'lucide-react';
@@ -8,6 +8,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+const OY_NOMLARI = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
 
 const emptyForm = {
   oy_kun: '', soat_minut: '', kamchilik: '',
@@ -22,9 +24,8 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
   const [form, setForm] = useState(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Sanalar bo'yicha guruhlash
+  const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [groupedDates, setGroupedDates] = useState([]);
   const [groupedData, setGroupedData] = useState({});
 
   useEffect(() => {
@@ -39,7 +40,6 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
       .order('created_at', { ascending: false });
     if (data) {
       setList(data);
-      // Sanalar bo'yicha guruhlash
       const grouped = {};
       data.forEach(r => {
         const date = r.created_at?.slice(0, 10) || 'Noma\'lum';
@@ -47,18 +47,37 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
         grouped[date].push(r);
       });
       setGroupedData(grouped);
-      setGroupedDates(Object.keys(grouped).sort((a, b) => b.localeCompare(a)));
     }
     setLoaded(true);
   };
+
+  const months = useMemo(() => {
+    const set = new Set(Object.keys(groupedData).map(d => d.slice(0, 7)));
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [groupedData]);
+
+  const daysInMonth = useMemo(() => {
+    if (!selectedMonth) return [];
+    return Object.keys(groupedData).filter(d => d.startsWith(selectedMonth)).sort((a, b) => b.localeCompare(a));
+  }, [selectedMonth, groupedData]);
+
+  const formatMonth = (ym) => {
+    const [y, m] = ym.split('-');
+    return `${OY_NOMLARI[parseInt(m) - 1]} ${y}`;
+  };
+
+  const handleBack = () => {
+    if (selectedDate) { setSelectedDate(null); }
+    else if (selectedMonth) { setSelectedMonth(null); }
+  };
+
+  const step = selectedDate ? 'records' : selectedMonth ? 'days' : 'months';
 
   const save = async () => {
     if (!form.kamchilik.trim()) return toast.error("Kamchilik bayon qilinmagan!");
     setIsSaving(true);
     const { error } = await supabase.from('du46_journal').insert({
-      station,
-      worker_name: workerName,
-      ...form
+      station, worker_name: workerName, ...form
     });
     if (!error) {
       toast.success("DU-46 ga yozildi!");
@@ -80,30 +99,22 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
   // ARXIV KO'RINISHI
   if (mode === 'archive') {
     return (
-      <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-2 sm:p-4">
+      <div className="fixed inset-0 bg-black/70 z-200 flex items-center justify-center p-2 sm:p-4">
         <div className="bg-white w-full max-w-6xl rounded-3xl overflow-hidden flex flex-col max-h-[95vh]">
 
           {/* HEADER */}
           <div className="flex justify-between items-center px-5 py-4 border-b bg-blue-50 shrink-0">
-            <div className="flex items-center gap-2">
-              {selectedDate && (
-                <button
-                  onClick={() => setSelectedDate(null)}
-                  className="text-blue-900 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline"
-                >
-                  <ArrowLeft size={16}/> Sanalar
+            <div className="flex items-center gap-3">
+              {step !== 'months' && (
+                <button onClick={handleBack} className="text-blue-900 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline">
+                  <ArrowLeft size={16}/> {step === 'days' ? 'Oylar' : 'Kunlar'}
                 </button>
               )}
-              {!selectedDate && (
-                <h2 className="text-base font-black text-blue-900 uppercase">
-                  📋 DU-46 Arxiv — {station}
-                </h2>
-              )}
-              {selectedDate && (
-                <h2 className="text-base font-black text-blue-900 uppercase">
-                  📋 DU-46 — {new Date(selectedDate).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                </h2>
-              )}
+              <h2 className="text-base font-black text-blue-900 uppercase">
+                {step === 'months' && `📋 DU-46 Arxiv — ${station}`}
+                {step === 'days' && `📅 ${formatMonth(selectedMonth)}`}
+                {step === 'records' && `🗓 ${new Date(selectedDate).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
+              </h2>
             </div>
             <button onClick={onClose} className="bg-slate-100 p-2 rounded-full cursor-pointer hover:bg-slate-200">
               <X size={20} />
@@ -117,27 +128,36 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
             ) : list.length === 0 ? (
               <p className="text-center py-12 text-slate-400 font-bold">Hozircha yozuvlar yo'q</p>
 
-            ) : !selectedDate ? (
-              // SANALAR RO'YXATI
+            ) : step === 'months' ? (
               <div className="space-y-2">
-                {groupedDates.map(date => (
-                  <button
-                    key={date}
-                    onClick={() => setSelectedDate(date)}
-                    className="w-full text-left p-4 rounded-2xl bg-white hover:bg-blue-900 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all shadow-sm"
-                  >
-                    <span className="font-black">
-                      📅 {new Date(date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                    </span>
-                    <span className="text-xs font-bold opacity-60 group-hover:opacity-100">
-                      {groupedData[date].length} ta yozuv
-                    </span>
+                {months.map(m => {
+                  const count = daysInMonth.length > 0
+                    ? Object.keys(groupedData).filter(d => d.startsWith(m)).reduce((sum, d) => sum + groupedData[d].length, 0)
+                    : Object.keys(groupedData).filter(d => d.startsWith(m)).reduce((sum, d) => sum + groupedData[d].length, 0);
+                  return (
+                    <button key={m} onClick={() => setSelectedMonth(m)}
+                      className="w-full text-left p-4 rounded-2xl bg-white hover:bg-blue-900 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all shadow-sm">
+                      <span className="font-black">📅 {formatMonth(m)}</span>
+                      <span className="text-xs font-bold opacity-60 group-hover:opacity-100">
+                        {Object.keys(groupedData).filter(d => d.startsWith(m)).reduce((sum, d) => sum + groupedData[d].length, 0)} ta yozuv
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+            ) : step === 'days' ? (
+              <div className="space-y-2">
+                {daysInMonth.map(date => (
+                  <button key={date} onClick={() => setSelectedDate(date)}
+                    className="w-full text-left p-4 rounded-2xl bg-white hover:bg-blue-900 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all shadow-sm">
+                    <span className="font-black">🗓 {new Date(date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                    <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{groupedData[date].length} ta yozuv</span>
                   </button>
                 ))}
               </div>
 
             ) : (
-              // TANLANGAN SANADAGI YOZUVLAR — KATTA JADVAL
               <div className="overflow-x-auto">
                 <table className="w-full text-xs border-collapse" style={{ minWidth: '1100px' }}>
                   <thead>
@@ -187,7 +207,7 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
 
   // FORMA KO'RINISHI
   return (
-    <div className="fixed inset-0 bg-black/80 z-[210] flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 bg-black/80 z-210 flex items-center justify-center p-2 sm:p-4">
       <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden flex flex-col max-h-[95vh]">
         <div className="flex justify-between items-center px-6 py-4 border-b bg-blue-50 shrink-0">
           <h3 className="font-black text-blue-900 uppercase">📋 DU-46 — Yangi yozuv</h3>
@@ -206,62 +226,31 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
               <input {...f('soat_minut')} placeholder="14:30" className={inputCls} />
             </div>
           </div>
-
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase">Kamchilik bayoni *</label>
             <textarea {...f('kamchilik')} placeholder="Topilgan kamchilikni yozing..." rows={3}
               className="w-full p-3 border-2 rounded-xl outline-none focus:border-blue-600 font-bold text-sm mt-1" />
           </div>
-
-{/* XABAR BERISH - O'ZGARTIRILDI */}
-<div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-  <p className="text-[10px] font-black text-slate-400 uppercase">
-    📢 Distansiyaning tegishli xodimi qachon xabar topgan
-  </p>
-  <div className="grid grid-cols-3 gap-2">
-    <div>
-      <label className="text-[9px] font-black text-slate-400">Oy/kun</label>
-      <input {...f('xabar_oy_kun')} placeholder="11.03" className={inputCls} />
-    </div>
-    <div>
-      <label className="text-[9px] font-black text-slate-400">Soat</label>
-      <input {...f('xabar_soat')} placeholder="14:35" className={inputCls} />
-    </div>
-    <div>
-      <label className="text-[9px] font-black text-slate-400">Usul</label>
-      <input {...f('xabar_usul')} placeholder="Telefon" className={inputCls} />
-    </div>
-  </div>
-</div>
-
-{/* KELISH VAQTI - O'ZGARTIRILDI */}
-<div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-  <p className="text-[10px] font-black text-slate-400 uppercase">
-    🚶 Distansiyaning tegishli xodimi nosozlik joyiga qachon yetib keldi
-  </p>
-  <div className="grid grid-cols-2 gap-2">
-    <div>
-      <label className="text-[9px] font-black text-slate-400">Oy/kun</label>
-      <input {...f('kelish_oy_kun')} placeholder="11.03" className={inputCls} />
-    </div>
-    <div>
-      <label className="text-[9px] font-black text-slate-400">Soat</label>
-      <input {...f('kelish_soat')} placeholder="14:50" className={inputCls} />
-    </div>
-  </div>
-</div>
-
+          <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
+            <p className="text-[10px] font-black text-slate-400 uppercase">📢 Distansiyaning tegishli xodimi qachon xabar topgan</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="text-[9px] font-black text-slate-400">Oy/kun</label><input {...f('xabar_oy_kun')} placeholder="11.03" className={inputCls} /></div>
+              <div><label className="text-[9px] font-black text-slate-400">Soat</label><input {...f('xabar_soat')} placeholder="14:35" className={inputCls} /></div>
+              <div><label className="text-[9px] font-black text-slate-400">Usul</label><input {...f('xabar_usul')} placeholder="Telefon" className={inputCls} /></div>
+            </div>
+          </div>
+          <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
+            <p className="text-[10px] font-black text-slate-400 uppercase">🚶 Distansiyaning tegishli xodimi nosozlik joyiga qachon yetib keldi</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[9px] font-black text-slate-400">Oy/kun</label><input {...f('kelish_oy_kun')} placeholder="11.03" className={inputCls} /></div>
+              <div><label className="text-[9px] font-black text-slate-400">Soat</label><input {...f('kelish_soat')} placeholder="14:50" className={inputCls} /></div>
+            </div>
+          </div>
           <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
             <p className="text-[10px] font-black text-slate-400 uppercase">Bartaraf etish</p>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[9px] font-black text-slate-400">Oy/kun</label>
-                <input {...f('bartaraf_oy_kun')} placeholder="11.03" className={inputCls} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black text-slate-400">Soat</label>
-                <input {...f('bartaraf_soat')} placeholder="15:10" className={inputCls} />
-              </div>
+              <div><label className="text-[9px] font-black text-slate-400">Oy/kun</label><input {...f('bartaraf_oy_kun')} placeholder="11.03" className={inputCls} /></div>
+              <div><label className="text-[9px] font-black text-slate-400">Soat</label><input {...f('bartaraf_soat')} placeholder="15:10" className={inputCls} /></div>
             </div>
             <div>
               <label className="text-[9px] font-black text-slate-400">Sabab va ko'rilgan choralar</label>
@@ -269,12 +258,10 @@ export default function Du46Journal({ station, workerName, mode, onClose }) {
                 className="w-full p-2 border-2 rounded-xl outline-none focus:border-blue-600 font-bold text-xs mt-1" />
             </div>
           </div>
-
           <div className="bg-blue-50 p-3 rounded-xl flex items-center gap-2">
             <span className="text-[10px] font-black text-slate-500 uppercase">Imzo:</span>
             <span className="font-black text-blue-900">{workerName}</span>
           </div>
-
           <button onClick={save} disabled={isSaving}
             className="w-full bg-blue-900 text-white py-4 rounded-2xl font-black cursor-pointer disabled:opacity-50 text-sm">
             {isSaving ? 'Saqlanmoqda...' : '💾 Saqlash'}

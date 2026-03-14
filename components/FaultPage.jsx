@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -10,6 +10,8 @@ const FAULT_REASONS = [
   "Yo'nalishni o'zgartirish",
   "Boshqa"
 ];
+
+const OY_NOMLARI = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
 
 const getDuration = (created, resolved) => {
   const c = created.endsWith('Z') || created.includes('+') ? created : created + 'Z';
@@ -26,8 +28,8 @@ const getDuration = (created, resolved) => {
 export default function FaultPage({ station, workerName, onBack, supabase, formatFullDateTime }) {
   const [activeFaults, setActiveFaults] = useState([]);
   const [showArchive, setShowArchive] = useState(false);
-  const [archiveDates, setArchiveDates] = useState([]);
   const [archiveGrouped, setArchiveGrouped] = useState({});
+  const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -43,27 +45,14 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-      const { data } = await supabase
-        .from('faults')
-        .select('*')
-        .eq('station', station)
-        .gte('created_at', oneMonthAgo.toISOString())
-        .order('created_at', { ascending: false });
-      if (data) setActiveFaults(data);
-    };
-    if (station) load();
+    if (station) loadActiveFaults();
   }, [station]);
 
   const loadActiveFaults = async () => {
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
     const { data } = await supabase
-      .from('faults')
-      .select('*')
-      .eq('station', station)
+      .from('faults').select('*').eq('station', station)
       .gte('created_at', oneMonthAgo.toISOString())
       .order('created_at', { ascending: false });
     if (data) setActiveFaults(data);
@@ -71,11 +60,8 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
 
   const loadArchive = async () => {
     const { data } = await supabase
-      .from('faults')
-      .select('*')
-      .eq('station', station)
-      .eq('status', 'resolved')
-      .order('created_at', { ascending: false });
+      .from('faults').select('*').eq('station', station)
+      .eq('status', 'resolved').order('created_at', { ascending: false });
     if (data) {
       const grouped = {};
       data.forEach(f => {
@@ -84,27 +70,45 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
         grouped[date].push(f);
       });
       setArchiveGrouped(grouped);
-      setArchiveDates(Object.keys(grouped).sort((a, b) => b.localeCompare(a)));
       setShowArchive(true);
     }
   };
+
+  // Oylar
+  const months = useMemo(() => {
+    const set = new Set(Object.keys(archiveGrouped).map(d => d.slice(0, 7)));
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [archiveGrouped]);
+
+  // Tanlangan oydagi kunlar
+  const daysInMonth = useMemo(() => {
+    if (!selectedMonth) return [];
+    return Object.keys(archiveGrouped).filter(d => d.startsWith(selectedMonth)).sort((a, b) => b.localeCompare(a));
+  }, [selectedMonth, archiveGrouped]);
+
+  const formatMonth = (ym) => {
+    const [y, m] = ym.split('-');
+    return `${OY_NOMLARI[parseInt(m) - 1]} ${y}`;
+  };
+
+  const handleArchiveBack = () => {
+    if (selectedDate) setSelectedDate(null);
+    else if (selectedMonth) setSelectedMonth(null);
+  };
+
+  const archiveStep = selectedDate ? 'records' : selectedMonth ? 'days' : 'months';
 
   const sendFault = async () => {
     if (!faultReason) return toast.error("Sababni tanlang!");
     setIsSending(true);
     const { error } = await supabase.from('faults').insert({
-      station,
-      reason: faultReason,
-      custom_reason: customReason,
-      status: 'active',
-      worker_name: workerName
+      station, reason: faultReason, custom_reason: customReason,
+      status: 'active', worker_name: workerName
     });
     if (!error) {
       toast.success("Nosozlik yuborildi!");
-      setShowSendModal(false);
-      setShowConfirm(false);
-      setFaultReason('');
-      setCustomReason('');
+      setShowSendModal(false); setShowConfirm(false);
+      setFaultReason(''); setCustomReason('');
       loadActiveFaults();
     } else {
       toast.error("Xatolik yuz berdi!");
@@ -113,10 +117,8 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
   };
 
   const resolveFault = async (id) => {
-    const { error } = await supabase
-      .from('faults')
-      .update({ status: 'resolved', resolved_at: new Date().toISOString() })
-      .eq('id', id);
+    const { error } = await supabase.from('faults')
+      .update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', id);
     if (!error) {
       toast.success("Nosozlik bartaraf etildi!");
       setConfirmResolveId(null);
@@ -151,20 +153,16 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
         </button>
       </div>
 
-      {/* NOSOZLIK YUBORISH TUGMASI */}
-      <button
-        onClick={() => setShowSendModal(true)}
-        className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-sm uppercase cursor-pointer mb-5 shadow-lg transition-all"
-      >
+      {/* YUBORISH TUGMASI */}
+      <button onClick={() => setShowSendModal(true)}
+        className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-sm uppercase cursor-pointer mb-5 shadow-lg transition-all">
         + Nosozlik haqida xabar berish
       </button>
 
-      {/* SO'NGGI 1 OY NOSOZLIKLAR */}
+      {/* SO'NGGI 1 OY */}
       <h3 className="font-black text-sm uppercase text-slate-500 mb-3">So'nggi 1 oy ichidagi nosozliklar</h3>
       {activeFaults.length === 0 ? (
-        <div className="bg-white p-8 rounded-2xl text-center text-slate-400 font-bold border-2 border-slate-100">
-          Nosozliklar yo'q
-        </div>
+        <div className="bg-white p-8 rounded-2xl text-center text-slate-400 font-bold border-2 border-slate-100">Nosozliklar yo'q</div>
       ) : (
         <div className="space-y-3">
           {activeFaults.map(f => (
@@ -178,16 +176,12 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
                     <p className="text-[10px] font-black text-red-600 mt-0.5">🔴 Aktiv: {getFaultTimer(f.created_at)}</p>
                   )}
                   {f.resolved_at && (
-                    <p className="text-[10px] font-black text-green-600 mt-0.5">
-                      ✅ Bartaraf etildi: {getDuration(f.created_at, f.resolved_at)}
-                    </p>
+                    <p className="text-[10px] font-black text-green-600 mt-0.5">✅ Bartaraf etildi: {getDuration(f.created_at, f.resolved_at)}</p>
                   )}
                 </div>
                 {f.status === 'active' && (
-                  <button
-                    onClick={() => setConfirmResolveId(f.id)}
-                    className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs font-black cursor-pointer ml-2 shrink-0"
-                  >
+                  <button onClick={() => setConfirmResolveId(f.id)}
+                    className="bg-green-600 text-white px-3 py-2 rounded-xl text-xs font-black cursor-pointer ml-2 shrink-0">
                     Bartaraf etildi
                   </button>
                 )}
@@ -197,56 +191,62 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
         </div>
       )}
 
-      {/* ARXIV MODALI */}
+      {/* ARXIV MODALI — OY → KUN → YOZUVLAR */}
       {showArchive && (
         <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-slate-50">
-              <div className="flex items-center gap-2">
-                {selectedDate && (
-                  <button onClick={() => setSelectedDate(null)} className="text-blue-900 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline">
-                    <ArrowLeft size={14}/> Sanalar
+              <div className="flex items-center gap-3">
+                {archiveStep !== 'months' && (
+                  <button onClick={handleArchiveBack} className="text-blue-900 font-black text-xs flex items-center gap-1 cursor-pointer hover:underline">
+                    <ArrowLeft size={14}/> {archiveStep === 'days' ? 'Oylar' : 'Kunlar'}
                   </button>
                 )}
                 <h3 className="font-black text-slate-800 uppercase">
-                  {selectedDate
-                    ? new Date(selectedDate).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                    : '📂 Nosozliklar arxivi'
-                  }
+                  {archiveStep === 'months' && '📂 Nosozliklar arxivi'}
+                  {archiveStep === 'days' && `📅 ${formatMonth(selectedMonth)}`}
+                  {archiveStep === 'records' && `🗓 ${new Date(selectedDate).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
                 </h3>
               </div>
-              <button onClick={() => { setShowArchive(false); setSelectedDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer">
-                <X size={20}/>
-              </button>
+              <button onClick={() => { setShowArchive(false); setSelectedDate(null); setSelectedMonth(null); }}
+                className="bg-slate-100 p-2 rounded-full cursor-pointer"><X size={20}/></button>
             </div>
+
             <div className="overflow-y-auto p-4 space-y-2">
-              {!selectedDate ? (
-                archiveDates.length === 0 ? (
+              {archiveStep === 'months' && (
+                months.length === 0 ? (
                   <p className="text-center py-8 text-slate-400 font-bold">Arxiv bo'sh</p>
-                ) : (
-                  archiveDates.map(date => (
-                    <button key={date} onClick={() => setSelectedDate(date)}
+                ) : months.map(m => {
+                  const count = Object.keys(archiveGrouped).filter(d => d.startsWith(m)).reduce((sum, d) => sum + archiveGrouped[d].length, 0);
+                  return (
+                    <button key={m} onClick={() => setSelectedMonth(m)}
                       className="w-full text-left p-4 rounded-2xl bg-slate-50 hover:bg-red-600 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all">
-                      <span className="font-black">📅 {new Date(date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
-                      <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{archiveGrouped[date].length} ta nosozlik</span>
+                      <span className="font-black">📅 {formatMonth(m)}</span>
+                      <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{count} ta nosozlik</span>
                     </button>
-                  ))
-                )
-              ) : (
-                archiveGrouped[selectedDate].map(f => (
-                  <div key={f.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-red-500">
-                    <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
-                    <p className="text-[10px] font-bold text-blue-700">👤 {f.worker_name || "Noma'lum"}</p>
-                    <div className="flex flex-wrap gap-3 mt-1 text-[10px] text-slate-500 font-bold">
-                      <span>⏱ {formatFullDateTime(f.created_at)}</span>
-                      {f.resolved_at && <span>✅ {formatFullDateTime(f.resolved_at)}</span>}
-                      {f.resolved_at && (
-                        <span className="text-green-600">🕐 {getDuration(f.created_at, f.resolved_at)}</span>
-                      )}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
+
+              {archiveStep === 'days' && daysInMonth.map(date => (
+                <button key={date} onClick={() => setSelectedDate(date)}
+                  className="w-full text-left p-4 rounded-2xl bg-slate-50 hover:bg-red-600 hover:text-white border-2 border-slate-100 flex justify-between items-center cursor-pointer group transition-all">
+                  <span className="font-black">🗓 {new Date(date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                  <span className="text-xs font-bold opacity-60 group-hover:opacity-100">{archiveGrouped[date].length} ta nosozlik</span>
+                </button>
+              ))}
+
+              {archiveStep === 'records' && archiveGrouped[selectedDate].map(f => (
+                <div key={f.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-red-500">
+                  <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
+                  <p className="text-[10px] font-bold text-blue-700">👤 {f.worker_name || "Noma'lum"}</p>
+                  <div className="flex flex-wrap gap-3 mt-1 text-[10px] text-slate-500 font-bold">
+                    <span>⏱ {formatFullDateTime(f.created_at)}</span>
+                    {f.resolved_at && <span>✅ {formatFullDateTime(f.resolved_at)}</span>}
+                    {f.resolved_at && <span className="text-green-600">🕐 {getDuration(f.created_at, f.resolved_at)}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -258,9 +258,8 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
           <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-red-50">
               <h3 className="font-black text-red-700 uppercase">Nosozlik sababi</h3>
-              <button onClick={() => { setShowSendModal(false); setFaultReason(''); setCustomReason(''); }} className="bg-white p-2 rounded-full cursor-pointer">
-                <X size={20}/>
-              </button>
+              <button onClick={() => { setShowSendModal(false); setFaultReason(''); setCustomReason(''); }}
+                className="bg-white p-2 rounded-full cursor-pointer"><X size={20}/></button>
             </div>
             <div className="p-6 space-y-3">
               <select value={faultReason} onChange={e => setFaultReason(e.target.value)}
@@ -273,11 +272,9 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
                   placeholder="Sababni yozing..." rows={3}
                   className="w-full p-3 border-2 rounded-xl font-bold outline-none focus:border-red-500"/>
               )}
-              <button
-                disabled={!faultReason || (faultReason === 'Boshqa' && !customReason)}
+              <button disabled={!faultReason || (faultReason === 'Boshqa' && !customReason)}
                 onClick={() => setShowConfirm(true)}
-                className="w-full bg-red-600 text-white py-4 rounded-2xl font-black cursor-pointer disabled:opacity-50"
-              >
+                className="w-full bg-red-600 text-white py-4 rounded-2xl font-black cursor-pointer disabled:opacity-50">
                 Yuborish
               </button>
             </div>
@@ -296,9 +293,7 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
                 {isSending ? 'Yuborilmoqda...' : 'Ha, yuborish'}
               </button>
               <button onClick={() => setShowConfirm(false)}
-                className="flex-1 bg-slate-200 py-3 rounded-2xl font-black cursor-pointer">
-                Bekor
-              </button>
+                className="flex-1 bg-slate-200 py-3 rounded-2xl font-black cursor-pointer">Bekor</button>
             </div>
           </div>
         </div>
@@ -311,13 +306,9 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
             <h3 className="text-xl font-black text-slate-800">Nosozlik bartaraf etildimi?</h3>
             <div className="flex gap-3">
               <button onClick={() => resolveFault(confirmResolveId)}
-                className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-black cursor-pointer">
-                Ha, tasdiqlash
-              </button>
+                className="flex-1 bg-green-600 text-white py-3 rounded-2xl font-black cursor-pointer">Ha, tasdiqlash</button>
               <button onClick={() => setConfirmResolveId(null)}
-                className="flex-1 bg-slate-200 py-3 rounded-2xl font-black cursor-pointer">
-                Bekor
-              </button>
+                className="flex-1 bg-slate-200 py-3 rounded-2xl font-black cursor-pointer">Bekor</button>
             </div>
           </div>
         </div>

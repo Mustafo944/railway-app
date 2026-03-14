@@ -265,7 +265,7 @@ const hasFault = activeFaults.some(f =>
       </div>
       {/* ISHCHILAR MODALI */}
       {bossStationWorkers && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 z-200 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-slate-50">
               <h3 className="font-black text-slate-800 uppercase">
