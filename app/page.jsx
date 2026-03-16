@@ -769,7 +769,19 @@ const groupedArchive = useMemo(() => {
         <header className="bg-blue-900 text-white p-3 sticky top-0 z-10 shadow-lg">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3">
-<img src="/logo.png" alt="Logo" className="w-20 h-20 object-contain" />
+<div className="relative shrink-0">
+  <div className="w-11 h-11 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20">
+    <ShieldCheck size={24} className="text-blue-900" strokeWidth={2.5}/>
+  </div>
+  {activeFaults.length > 0 && (
+    <>
+      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-blue-900 animate-ping"/>
+      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-blue-900 flex items-center justify-center">
+        <span className="text-white text-[7px] font-black">{activeFaults.length}</span>
+      </span>
+    </>
+  )}
+</div>
               <div className="flex flex-col leading-none">
 <div className="flex items-center gap-1.5">
   {activeFaults.length > 0 && (
@@ -782,7 +794,7 @@ const groupedArchive = useMemo(() => {
     SHCH BUXORO
   </span>
 </div>
-<span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest leading-none mt-1">
+<span className="text-xs text-blue-200 font-black uppercase tracking-wide leading-none mt-1">
   {(currentWorker?.role === 'boss' || currentWorker?.role === 'admin' || 
     currentWorker?.role === 'bosh_muhandis' || currentWorker?.role === 'boshliq_muovini')
     ? currentWorker?.full_name
@@ -826,15 +838,15 @@ Chiqish
 
       <main className="max-w-6xl mx-auto p-4 sm:p-6">
 {view === 'login' && (
-  <div className="flex items-center justify-center min-h-[90vh]">
+  <div className="flex items-center justify-center min-h-[80vh]">
     <div className="w-full max-w-sm">
       
       {/* Yuqori qism — gradient */}
-      <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 rounded-3xl p-8 text-white text-center shadow-2xl mb-4 relative overflow-hidden">
+<div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 rounded-3xl p-4 text-white text-center shadow-2xl mb-3 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-16 translate-x-16"/>
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-12 -translate-x-12"/>
         <div className="relative">
-<img src="/logo.png" alt="Logo" className="w-64 h-64 object-contain mb-2 mx-auto" />
+<img src="/logo.png" alt="Logo" className="w-50 h-50 object-contain mb-1 mx-auto" />
           <h1 className="text-2xl font-black uppercase tracking-widest">SHCH BUXORO</h1>
           <p className="text-blue-300 text-xs font-bold mt-1 uppercase tracking-widest">Monitoring tizimi</p>
         </div>
