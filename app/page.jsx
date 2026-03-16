@@ -838,7 +838,7 @@ Chiqish
 
       <main className="max-w-6xl mx-auto p-4 sm:p-6">
 {view === 'login' && (
-  <div className="flex items-center justify-center min-h-[80vh]">
+<div className="flex items-center justify-center min-h-[calc(100vh-2rem)] py-0">
     <div className="w-full max-w-sm">
       
       {/* Yuqori qism — gradient */}
@@ -900,7 +900,7 @@ Chiqish
         </form>
       </div>
 
-<p className="text-center text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-widest">
+<p className="text-center text-slate-400 text-[10px] font-bold mt-1 uppercase tracking-widest">
   © 2025 SHCH Buxoro
 </p>
     </div>
