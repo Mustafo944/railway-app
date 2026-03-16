@@ -846,7 +846,7 @@ Chiqish
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-16 translate-x-16"/>
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-12 -translate-x-12"/>
         <div className="relative">
-<img src="/logo.png" alt="Logo" className="w-50 h-50 object-contain mb-1 mx-auto" />
+<img src="/logo.png" alt="Logo" className="w-45 h-45 object-contain mb-1 mx-auto" />
           <h1 className="text-2xl font-black uppercase tracking-widest">SHCH BUXORO</h1>
           <p className="text-blue-300 text-xs font-bold mt-1 uppercase tracking-widest">Monitoring tizimi</p>
         </div>
@@ -900,7 +900,7 @@ Chiqish
         </form>
       </div>
 
-<p className="text-center text-slate-400 text-[10px] font-bold mt-1 uppercase tracking-widest">
+<p className="text-center text-slate-400 text-[10px] font-bold mt-4 uppercase tracking-widest">
   © 2025 SHCH Buxoro
 </p>
     </div>
