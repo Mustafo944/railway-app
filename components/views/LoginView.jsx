@@ -7,7 +7,8 @@ export default function LoginView({
   onShowPasswordToggle, onSubmit
 }) {
   return (
-    <div className="flex items-center justify-center min-h-[80vh]">
+// min-h-[80vh] → min-h-screen
+<div className="flex items-center justify-center min-h-screen">
       <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border-t-4 border-blue-900 text-center">
         <img src="/logo.png" alt="Logo" className="w-48 h-48 object-contain mb-2 mx-auto" />
         <p className="text-2xl font-black text-blue-900 uppercase tracking-widest mb-6">SHCH BUXORO</p>
