@@ -108,10 +108,23 @@ const [editRole, setEditRole] = useState('');
 const [menuView, setMenuView] = useState('main'); // 'main' | 'fault' | 'journal' | 'workers'
 const [newWorkerPhone, setNewWorkerPhone] = useState('');
 const [editPhone, setEditPhone] = useState('');
-  const loadWorkers = useCallback(async () => {
-    const { data } = await supabase.from('allowed_emails').select('*').order('role', { ascending: true });
-    if (data) setWorkersList(data);
-  }, []);
+const loadWorkers = useCallback(async () => {
+  const { data } = await supabase.from('allowed_emails').select('*');
+  if (data) {
+    const roleOrder = {
+      'admin': 1,
+      'boss': 2,
+      'bosh_muhandis': 3,
+      'boshliq_muovini': 4,
+      'bekat_boshlig': 5,
+      'katta_elektromexanik': 6,
+      'elektromexanik': 7,
+      'elektromontyor': 8,
+    };
+    const sorted = data.sort((a, b) => (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99));
+    setWorkersList(sorted);
+  }
+}, []);
 
 const loadAllTasks = useCallback(async () => {
   const today = new Date().toISOString().slice(0, 10);
@@ -127,16 +140,6 @@ const loadAllTasks = useCallback(async () => {
 const stationCache = useRef({});
 
 const loadStationData = useCallback(async (station) => {
-  // Cache bor bo'lsa — darhol ko'rsat
-  if (stationCache.current[station]) {
-    setActiveTasks(stationCache.current[station].active);
-    setArchive(stationCache.current[station].archive);
-    setIsLoadingTasks(false);
-    // Background da yangilash
-    fetchStationData(station);
-    return;
-  }
-
   setIsLoadingTasks(true);
   await fetchStationData(station);
 }, []);
@@ -642,17 +645,18 @@ const handleAddTask = async (ishObj) => {
   if (isSubmitting) return;
   setIsSubmitting(true);
 
-  const newTask = {
-    worker_id: currentWorker.full_name,
-    name: ishObj.ish,
-    station: selectedStation,
-    start_time: new Date().toISOString(),
-    status: 'pending',
-    bolim: selectedBolim?.bolim || '',
-    davriylik: ishObj.davriylik || '',
-    bajaruvchi: ishObj.bajaruvchi || '',
-    jurnal: ishObj.jurnal || '',
-  };
+const newTask = {
+  worker_id: currentWorker.full_name,
+  name: ishObj.ish,
+  station: selectedStation,
+  start_time: new Date().toISOString(),
+  status: 'pending',
+  bolim: selectedBolim?.bolim || '',
+  davriylik: ishObj.davriylik || '',
+  bajaruvchi: ishObj.bajaruvchi || '',
+  jurnal: ishObj.jurnal || '',
+  nsh: ishObj.nsh || '',  // ← QO'SHING
+};
 
   const { error } = await supabase.from('tasks').insert([newTask]);
 
@@ -764,9 +768,17 @@ const groupedArchive = useMemo(() => {
             <div className="flex items-center gap-3">
 <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
               <div className="flex flex-col leading-none">
-                <span className="text-[10px] text-yellow-300 font-black uppercase tracking-widest leading-none">
-  SHCH BUXORO
-</span>
+<div className="flex items-center gap-1.5">
+  {activeFaults.length > 0 && (
+    <span className="relative flex h-3 w-3">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600 border border-white"></span>
+    </span>
+  )}
+  <span className="text-[10px] text-yellow-300 font-black uppercase tracking-widest leading-none">
+    SHCH BUXORO
+  </span>
+</div>
                 <span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest leading-none mt-1">
                   {selectedStation || currentWorker?.full_name}
                 </span>
@@ -789,12 +801,6 @@ const groupedArchive = useMemo(() => {
       REJA
     </button>
   )}
-  {activeFaults.length > 0 && (
-  <span className="relative flex h-3 w-3 self-center">
-    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600 border border-white"></span>
-  </span>
-)}
 <button 
   onClick={() => { 
     localStorage.removeItem('railway_user');

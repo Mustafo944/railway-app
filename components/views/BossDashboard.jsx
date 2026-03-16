@@ -235,6 +235,11 @@ const hasFault = activeFaults.some(f =>
                         <tr key={task.id} className="hover:bg-blue-50/50 transition-colors text-slate-800">
 <td className="p-2 sm:p-3 text-[9px] sm:text-xs leading-tight">
   <span>{task.name}</span>
+  {task.nsh && (
+    <span className="ml-2 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[8px] font-black border border-blue-200">
+      📋 {task.nsh}
+    </span>
+  )}
 </td>
                           <td className="p-2 sm:p-3 text-blue-900 text-[9px] sm:text-xs whitespace-nowrap">{task.worker_id}</td>
                           <td className="p-2 sm:p-3 text-slate-500 font-mono text-[8px] sm:text-[10px] whitespace-nowrap">

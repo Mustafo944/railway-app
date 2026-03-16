@@ -123,11 +123,11 @@ export default function DashboardView({
                       🔄 {task.davriylik}
                     </span>
                   )}
-                  {task.jurnal && (
-                    <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-lg text-[9px] font-black border border-indigo-200">
-                      📔 {task.jurnal}
-                    </span>
-                  )}
+{task.nsh && (
+  <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black border border-blue-200">
+    📋 {task.nsh}
+  </span>
+)}
                 </div>
               </div>
 

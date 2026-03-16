@@ -2,7 +2,6 @@
 import { X, ArrowLeft, Plus } from 'lucide-react';
 
 export default function TaskMenu({
-  // Data
   taskMenuStep, setTaskMenuStep,
   selectedBolim, setSelectedBolim,
   selectedReja, setSelectedReja,
@@ -11,7 +10,6 @@ export default function TaskMenu({
   isSubmitting,
   YILLIK_REJA,
   TORT_HAFTALIK_REJA,
-  // Actions
   loadRejaBolimlar,
   loadRejaIshlar,
   handleAddTask,
@@ -41,10 +39,7 @@ export default function TaskMenu({
               {taskMenuStep === 'ishlar' && (selectedBolim?.bolim || '')}
             </h3>
           </div>
-          <button
-            onClick={onClose}
-            className="bg-slate-100 p-3 rounded-full hover:bg-slate-200 cursor-pointer"
-          >
+          <button onClick={onClose} className="bg-slate-100 p-3 rounded-full hover:bg-slate-200 cursor-pointer">
             <X size={28}/>
           </button>
         </div>
@@ -56,11 +51,7 @@ export default function TaskMenu({
           {taskMenuStep === 'main' && (
             <div className="flex flex-col gap-4">
               <button
-                onClick={() => {
-                  setSelectedReja('yillik');
-                  loadRejaBolimlar('yillik');
-                  setTaskMenuStep('bolimlar');
-                }}
+                onClick={() => { setSelectedReja('yillik'); loadRejaBolimlar('yillik'); setTaskMenuStep('bolimlar'); }}
                 className="w-full text-left p-6 rounded-3xl bg-blue-900 text-white font-black flex justify-between items-center cursor-pointer shadow-lg"
               >
                 <div>
@@ -70,11 +61,7 @@ export default function TaskMenu({
                 <Plus size={24}/>
               </button>
               <button
-                onClick={() => {
-                  setSelectedReja('haftalik');
-                  loadRejaBolimlar('haftalik');
-                  setTaskMenuStep('bolimlar');
-                }}
+                onClick={() => { setSelectedReja('haftalik'); loadRejaBolimlar('haftalik'); setTaskMenuStep('bolimlar'); }}
                 className="w-full text-left p-6 rounded-3xl bg-green-700 text-white font-black flex justify-between items-center cursor-pointer shadow-lg"
               >
                 <div>
@@ -129,7 +116,8 @@ export default function TaskMenu({
                   className="w-full text-left p-5 rounded-[20px] bg-slate-50 hover:bg-blue-900 hover:text-white border-2 border-slate-100 transition-all group cursor-pointer disabled:opacity-50"
                 >
                   <p className="font-black text-xs leading-relaxed">{ish.ish}</p>
-                  <div className="flex gap-3 mt-2 text-[9px] opacity-50 group-hover:opacity-80">
+                  <div className="flex flex-wrap gap-3 mt-2 text-[9px] opacity-50 group-hover:opacity-80">
+                    {ish.nsh && <span className="bg-blue-100 group-hover:bg-white/20 text-blue-900 group-hover:text-white px-2 py-0.5 rounded-lg font-black">{ish.nsh}</span>}
                     <span>⏱ {ish.davriylik}</span>
                     <span>👤 {ish.bajaruvchi}</span>
                   </div>
@@ -141,15 +129,16 @@ export default function TaskMenu({
               return <div className="text-center py-8 text-slate-400 font-bold">Bu bo'limda ishlar yo'q</div>;
             }
 
-            return selectedBolim.ishlar.map((ish) => (
+            return selectedBolim.ishlar.map((ish, index) => (
               <button
-                key={ish.ish}
+                key={`${ish.ish}-${index}`}
                 onClick={() => handleAddTask(ish)}
                 disabled={isSubmitting}
                 className="w-full text-left p-5 rounded-[20px] bg-slate-50 hover:bg-blue-900 hover:text-white border-2 border-slate-100 transition-all group cursor-pointer disabled:opacity-50"
               >
                 <p className="font-black text-xs leading-relaxed">{ish.ish}</p>
-                <div className="flex gap-3 mt-2 text-[9px] opacity-50 group-hover:opacity-80">
+                <div className="flex flex-wrap gap-3 mt-2 text-[9px] opacity-50 group-hover:opacity-80">
+                  {ish.nsh && <span className="bg-blue-100 group-hover:bg-white/20 text-blue-900 group-hover:text-white px-2 py-0.5 rounded-lg font-black">{ish.nsh}</span>}
                   <span>⏱ {ish.davriylik}</span>
                   <span>👤 {ish.bajaruvchi}</span>
                 </div>

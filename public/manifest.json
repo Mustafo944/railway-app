@@ -1,0 +1,24 @@
+{
+  "name": "SHCH Buxoro — Nazorat Tizimi",
+  "short_name": "SHCH Buxoro",
+  "description": "Buxoro temir yo'l bekat nazorat tizimi",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1e3a8a",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
