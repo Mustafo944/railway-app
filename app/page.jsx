@@ -900,9 +900,9 @@ Chiqish
         </form>
       </div>
 
-      <p className="text-center text-slate-400 text-[10px] font-bold mt-4 uppercase tracking-widest">
-        © 2025 SHCH Buxoro
-      </p>
+<p className="text-center text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-widest">
+  © 2025 SHCH Buxoro
+</p>
     </div>
   </div>
 )}
