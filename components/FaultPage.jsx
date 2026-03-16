@@ -1,7 +1,9 @@
 "use client"
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X, Download } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const FAULT_REASONS = [
   "Rels zanjiri",
@@ -74,13 +76,11 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
     }
   };
 
-  // Oylar
   const months = useMemo(() => {
     const set = new Set(Object.keys(archiveGrouped).map(d => d.slice(0, 7)));
     return Array.from(set).sort((a, b) => b.localeCompare(a));
   }, [archiveGrouped]);
 
-  // Tanlangan oydagi kunlar
   const daysInMonth = useMemo(() => {
     if (!selectedMonth) return [];
     return Object.keys(archiveGrouped).filter(d => d.startsWith(selectedMonth)).sort((a, b) => b.localeCompare(a));
@@ -97,6 +97,47 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
   };
 
   const archiveStep = selectedDate ? 'records' : selectedMonth ? 'days' : 'months';
+
+  // PDF funksiyalari
+  const buildPDF = (title, faults) => {
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text(`${station} — Nosozliklar arxivi`, 14, 15);
+    doc.setFontSize(10);
+    doc.text(title, 14, 23);
+    autoTable(doc, {
+      startY: 30,
+      head: [['#', 'Sabab', 'Ishchi', 'Boshlandi', 'Tugadi', 'Davomiyligi']],
+      body: faults.map((f, i) => [
+        i + 1,
+        f.reason === 'Boshqa' ? f.custom_reason : f.reason,
+        f.worker_name || "Noma'lum",
+        formatFullDateTime(f.created_at),
+        f.resolved_at ? formatFullDateTime(f.resolved_at) : 'Aktiv',
+        f.resolved_at ? getDuration(f.created_at, f.resolved_at) : '-',
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [254, 242, 242] },
+    });
+    return doc;
+  };
+
+  const downloadAllPDF = () => {
+    const all = Object.values(archiveGrouped).flat();
+    buildPDF('Barcha nosozliklar', all).save(`${station}-nosozliklar-barchasi.pdf`);
+  };
+
+  const downloadMonthPDF = () => {
+    const all = daysInMonth.flatMap(d => archiveGrouped[d] || []);
+    buildPDF(`Oy: ${formatMonth(selectedMonth)}`, all).save(`${station}-nosozliklar-${selectedMonth}.pdf`);
+  };
+
+  const downloadDayPDF = () => {
+    const all = archiveGrouped[selectedDate] || [];
+    const label = new Date(selectedDate).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    buildPDF(`Sana: ${label}`, all).save(`${station}-nosozliklar-${selectedDate}.pdf`);
+  };
 
   const sendFault = async () => {
     if (!faultReason) return toast.error("Sababni tanlang!");
@@ -191,7 +232,7 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
         </div>
       )}
 
-      {/* ARXIV MODALI — OY → KUN → YOZUVLAR */}
+      {/* ARXIV MODALI */}
       {showArchive && (
         <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -208,8 +249,28 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
                   {archiveStep === 'records' && `🗓 ${new Date(selectedDate).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
                 </h3>
               </div>
-              <button onClick={() => { setShowArchive(false); setSelectedDate(null); setSelectedMonth(null); }}
-                className="bg-slate-100 p-2 rounded-full cursor-pointer"><X size={20}/></button>
+              <div className="flex items-center gap-2">
+                {archiveStep === 'months' && (
+                  <button onClick={downloadAllPDF}
+                    className="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 cursor-pointer hover:bg-red-700">
+                    <Download size={13}/> PDF
+                  </button>
+                )}
+                {archiveStep === 'days' && (
+                  <button onClick={downloadMonthPDF}
+                    className="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 cursor-pointer hover:bg-red-700">
+                    <Download size={13}/> PDF
+                  </button>
+                )}
+                {archiveStep === 'records' && (
+                  <button onClick={downloadDayPDF}
+                    className="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 cursor-pointer hover:bg-red-700">
+                    <Download size={13}/> PDF
+                  </button>
+                )}
+                <button onClick={() => { setShowArchive(false); setSelectedDate(null); setSelectedMonth(null); }}
+                  className="bg-slate-100 p-2 rounded-full cursor-pointer"><X size={20}/></button>
+              </div>
             </div>
 
             <div className="overflow-y-auto p-4 space-y-2">
@@ -236,7 +297,7 @@ export default function FaultPage({ station, workerName, onBack, supabase, forma
                 </button>
               ))}
 
-              {archiveStep === 'records' && archiveGrouped[selectedDate].map(f => (
+              {archiveStep === 'records' && (archiveGrouped[selectedDate] || []).map(f => (
                 <div key={f.id} className="p-4 rounded-2xl bg-slate-50 border-l-4 border-l-red-500">
                   <p className="font-black text-sm">{f.reason === 'Boshqa' ? f.custom_reason : f.reason}</p>
                   <p className="text-[10px] font-bold text-blue-700">👤 {f.worker_name || "Noma'lum"}</p>

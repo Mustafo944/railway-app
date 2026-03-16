@@ -1,17 +1,15 @@
 "use client"
 import { useState, useEffect } from 'react';
 import { 
-  MapPin, History, ShieldCheck, BarChart, AlertTriangle, Clock, CheckCircle, X, User
+  MapPin, History, ShieldCheck, BarChart, AlertTriangle, Clock, CheckCircle, X, User, Zap
 } from 'lucide-react';
 
 export default function BossDashboard({
-  // Data
   activeFaults,
   allTasksForBoss,
   tasksByStation,
   BEKATLAR,
   workersList,
-  // Actions
   getFaultTimer,
   formatFullDateTime,
   loadFaultStats,
@@ -21,14 +19,13 @@ export default function BossDashboard({
   setShowFaultStats,
   setShowBigAlert,
 }) {
-const [tick, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
+  const [bossStationWorkers, setBossStationWorkers] = useState(null);
 
-useEffect(() => {
-  const interval = setInterval(() => setTick(t => t + 1), 1000);
-  return () => clearInterval(interval);
-}, []);
-
-const [bossStationWorkers, setBossStationWorkers] = useState(null);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const stationWorkers = bossStationWorkers
     ? [...(workersList || [])].filter(w => {
@@ -50,45 +47,54 @@ const [bossStationWorkers, setBossStationWorkers] = useState(null);
     boss: '🔵 Nazoratchi',
     admin: '🔴 Admin',
   };
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
 
-      {/* FAOL NOSOZLIKLAR VIDJET */}
-      {activeFaults.length > 0 && (
-        <div className="mb-6 space-y-3 animate-in slide-in-from-top duration-500">
-          {activeFaults.map(fault => (
-            <div key={fault.id} className="bg-red-600 text-white p-4 rounded-3xl shadow-xl border-b-4 border-red-800">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
-                    <ShieldCheck size={20} className="text-white" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase opacity-70 leading-none mb-1 text-white">Faol nosozlik:</p>
-<p className="font-black text-sm uppercase text-white leading-tight">
-  {fault.station?.split(',').map(s => s.trim()).join(' | ')} — {fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}
-</p>
-                    <p className="text-xs text-yellow-200 mt-0.5">👤 {fault.worker_name || "Noma'lum"}</p>
-<p className="text-xs text-yellow-200 mt-1">
-  ⏱ {(() => {
-    if (!fault.created_at) return "00:00";
-const created = new Date(fault.created_at);
-const now = new Date();
-const diff = now.getTime() - created.getTime() - (5 * 60 * 60 * 1000);
+  const getFaultTimerLocal = (created_at) => {
+    if (!created_at) return "00:00";
+    const str = created_at.endsWith('Z') || created_at.includes('+') ? created_at : created_at + 'Z';
+    const diff = Date.now() - new Date(str).getTime();
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     const s = Math.floor((diff % 60000) / 1000);
     if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  })()}
-</p>
+  };
+
+  const pendingCount = allTasksForBoss.filter(t => t.status === 'pending').length;
+  const completedCount = allTasksForBoss.filter(t =>
+    t.status === 'completed' &&
+    t.end_time?.slice(0, 10) === new Date().toISOString().slice(0, 10)
+  ).length;
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-500">
+
+      {/* FAOL NOSOZLIKLAR */}
+      {activeFaults.length > 0 && (
+        <div className="space-y-3 animate-in slide-in-from-top duration-300">
+          {activeFaults.map(fault => (
+            <div key={fault.id} className="relative bg-gradient-to-r from-red-600 to-red-500 text-white p-4 rounded-3xl shadow-xl overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8"/>
+              <div className="flex justify-between items-center relative">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="bg-white/20 p-2.5 rounded-2xl">
+                    <AlertTriangle size={20} className="text-white"/>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-red-200 tracking-widest mb-0.5">🚨 Faol nosozlik</p>
+                    <p className="font-black text-sm uppercase leading-tight">
+                      {fault.station?.split(',').map(s => s.trim()).join(' | ')} — {fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] text-red-200">👤 {fault.worker_name || "Noma'lum"}</span>
+                      <span className="text-[10px] font-black text-yellow-300 bg-black/20 px-2 py-0.5 rounded-lg">
+                        ⏱ {getFaultTimerLocal(fault.created_at)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => { loadFaultStats(); setShowFaultStats(true); }}
-                  className="bg-red-900/50 hover:bg-red-900 p-2 rounded-xl transition-colors cursor-pointer"
-                >
-                  <BarChart size={18} />
+                <button onClick={() => { loadFaultStats(); setShowFaultStats(true); }}
+                  className="bg-white/20 hover:bg-white/30 p-2.5 rounded-xl transition-colors cursor-pointer shrink-0">
+                  <BarChart size={16}/>
                 </button>
               </div>
             </div>
@@ -96,205 +102,217 @@ const diff = now.getTime() - created.getTime() - (5 * 60 * 60 * 1000);
         </div>
       )}
 
-      {/* NAZORAT PANELI HEADER */}
-      <div className="bg-white p-6 rounded-4xl shadow-xl border-b-8 border-blue-900 flex flex-col md:flex-row justify-between items-center gap-4">
-        <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-          <ShieldCheck className="text-blue-900"/> Nazorat Paneli
-        </h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { loadFaultStats(); setShowFaultStats(true); }}
-            className="bg-red-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold cursor-pointer"
-          >
-            <BarChart size={18} /> Nosozliklar
-          </button>
-          <button
-            onClick={loadFaultArchive}
-            className="bg-slate-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold cursor-pointer"
-          >
-            <History size={18} /> Arxiv
-          </button>
-          <div className="flex items-center gap-1 bg-green-50 px-2 py-2 rounded-xl border border-green-200">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
-            <span className="text-[10px] font-black text-green-700 uppercase hidden sm:inline">Live Rejim Yoqilgan</span>
+      {/* HEADER */}
+      <div className="bg-gradient-to-r from-blue-900 to-blue-700 p-5 rounded-3xl shadow-xl text-white">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-3 rounded-2xl">
+              <ShieldCheck size={24}/>
+            </div>
+            <div>
+              <h2 className="text-lg font-black uppercase tracking-tight">Nazorat Paneli</h2>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"/>
+                <span className="text-[10px] text-blue-200 font-bold uppercase">Live rejim yoqilgan</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => { loadFaultStats(); setShowFaultStats(true); }}
+              className="bg-red-500 hover:bg-red-400 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-black cursor-pointer transition-all">
+              <BarChart size={15}/> Nosozliklar
+            </button>
+            <button onClick={loadFaultArchive}
+              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-black cursor-pointer transition-all">
+              <History size={15}/> Arxiv
+            </button>
           </div>
         </div>
       </div>
 
-      {/* STATISTIKA KARTALAR */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-red-600 text-white p-6 rounded-[28px] shadow-xl flex items-center gap-4">
-          <div className="bg-white/20 p-4 rounded-2xl">
-            <AlertTriangle size={32} />
-          </div>
-          <div>
-            <p className="text-[11px] font-black uppercase opacity-70">Faol nosozliklar</p>
-            <p className="text-4xl font-black">{activeFaults.length}</p>
-          </div>
+      {/* STATISTIKA */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-gradient-to-br from-red-500 to-red-600 text-white p-4 rounded-3xl shadow-lg flex flex-col items-center justify-center gap-1">
+          <AlertTriangle size={24} className="opacity-80"/>
+          <p className="text-3xl font-black">{activeFaults.length}</p>
+          <p className="text-[9px] font-black uppercase opacity-70 text-center">Faol nosozlik</p>
         </div>
-
-        <div className="bg-orange-500 text-white p-6 rounded-[28px] shadow-xl flex items-center gap-4">
-          <div className="bg-white/20 p-4 rounded-2xl">
-            <Clock size={32} />
-          </div>
-          <div>
-            <p className="text-[11px] font-black uppercase opacity-70">Faol ishlar</p>
-            <p className="text-4xl font-black">
-              {allTasksForBoss.filter(t => t.status === 'pending').length}
-            </p>
-          </div>
+        <div className="bg-gradient-to-br from-orange-400 to-orange-500 text-white p-4 rounded-3xl shadow-lg flex flex-col items-center justify-center gap-1">
+          <Clock size={24} className="opacity-80"/>
+          <p className="text-3xl font-black">{pendingCount}</p>
+          <p className="text-[9px] font-black uppercase opacity-70 text-center">Faol ishlar</p>
         </div>
-
-        <div className="bg-green-600 text-white p-6 rounded-[28px] shadow-xl flex items-center gap-4">
-          <div className="bg-white/20 p-4 rounded-2xl">
-            <CheckCircle size={32} />
-          </div>
-          <div>
-            <p className="text-[11px] font-black uppercase opacity-70">Bugungi bajarilgan</p>
-            <p className="text-4xl font-black">
-              {allTasksForBoss.filter(t =>
-                t.status === 'completed' &&
-                t.end_time?.slice(0, 10) === new Date().toISOString().slice(0, 10)
-              ).length}
-            </p>
-          </div>
+        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-4 rounded-3xl shadow-lg flex flex-col items-center justify-center gap-1">
+          <CheckCircle size={24} className="opacity-80"/>
+          <p className="text-3xl font-black">{completedCount}</p>
+          <p className="text-[9px] font-black uppercase opacity-70 text-center">Bajarilgan</p>
         </div>
       </div>
 
-      {/* BEKATLAR RO'YXATI */}
-      <div className="grid gap-8">
+      {/* BEKATLAR */}
+      <div className="grid gap-4">
         {BEKATLAR.map(station => {
-          const sTasks = tasksByStation[station] || [];
-const hasFault = activeFaults.some(f => 
-  f.station?.split(',').map(s => s.trim()).includes(station) && f.status === "active"
-);
+const sTasks = [...(tasksByStation[station] || [])].sort((a, b) => {
+  if (a.status === 'completed' && b.status !== 'completed') return -1;
+  if (a.status !== 'completed' && b.status === 'completed') return 1;
+  return 0;
+});
+          const hasFault = activeFaults.some(f =>
+            f.station?.split(',').map(s => s.trim()).includes(station) && f.status === "active"
+          );
+          const pendingTasks = sTasks.filter(t => t.status === 'pending');
+          const completedTasks = sTasks.filter(t => t.status === 'completed');
 
           return (
-            <div key={station} className={`bg-white rounded-4xl shadow-lg overflow-hidden border ${
-              hasFault ? 'border-red-500 border-2' : 'border-slate-200'
+            <div key={station} className={`bg-white rounded-3xl shadow-md overflow-hidden border-2 transition-all ${
+              hasFault ? 'border-red-400' : 'border-slate-100'
             }`}>
 
               {/* BEKAT HEADER */}
-              <div className={`p-3 sm:p-4 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center ${
-                hasFault ? 'bg-red-50' : 'bg-slate-50'
+              <div className={`px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 ${
+                hasFault ? 'bg-gradient-to-r from-red-50 to-orange-50' : 'bg-gradient-to-r from-slate-50 to-white'
               }`}>
-                <div className="flex items-start gap-2 w-full sm:w-auto mb-2 sm:mb-0">
-                  <MapPin size={14} className="sm:w-4 sm:h-4 mt-0.5 text-blue-900" />
-                  <div className="flex flex-col">
-                    <h3 className="text-sm sm:text-base font-black text-blue-900 uppercase tracking-tighter">
-                      {station}
-                    </h3>
-                    <span className="text-[8px] sm:text-[9px] font-bold text-slate-500 uppercase tracking-wider">bekati</span>
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg ${hasFault ? 'bg-red-100' : 'bg-blue-100'}`}>
+                    <MapPin size={13} className={hasFault ? 'text-red-600' : 'text-blue-900'}/>
                   </div>
-                  {hasFault && (
-                    <span className="bg-red-600 text-white text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 whitespace-nowrap ml-auto sm:ml-2">
-                      <AlertTriangle size={8} /> Nosozlik
-                    </span>
-                  )}
+                  <div>
+                    <h3 className="text-sm font-black text-blue-900 uppercase tracking-tight">{station}</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {hasFault && (
+                        <span className="bg-red-500 text-white text-[7px] px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5">
+                          <AlertTriangle size={7}/> Nosozlik
+                        </span>
+                      )}
+                      {pendingTasks.length > 0 && (
+                        <span className="bg-orange-100 text-orange-700 text-[7px] px-1.5 py-0.5 rounded-full font-black">
+                          ⏳ {pendingTasks.length} faol
+                        </span>
+                      )}
+                      {completedTasks.length > 0 && (
+                        <span className="bg-green-100 text-green-700 text-[7px] px-1.5 py-0.5 rounded-full font-black">
+                          ✅ {completedTasks.length} bajarildi
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto justify-end mt-1 sm:mt-0">
-  <button
-    onClick={() => loadBossArchive(station)}
-    className="text-[8px] font-black bg-slate-700 text-white px-2 py-1 rounded-lg uppercase flex items-center gap-1 cursor-pointer hover:bg-slate-900"
-  >
-    <History size={9} /> Ishlar arxivi
+<div className="flex flex-wrap items-center gap-1.5 justify-end">
+  <button onClick={() => loadBossArchive(station)}
+    className="text-[10px] font-black bg-slate-700 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-sm">
+    <History size={11}/> Ishlar arxivi
   </button>
-  <button
-    onClick={() => setBossStationWorkers(station)}
-    className="text-[8px] font-black bg-green-700 text-white px-2 py-1 rounded-lg uppercase flex items-center gap-1 cursor-pointer hover:bg-green-900"
-  >
+  <button onClick={() => setBossStationWorkers(station)}
+    className="text-[10px] font-black bg-emerald-600 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-sm">
     👥 Ishchilar
   </button>
-  <button
-    onClick={() => setBossJournalStation(station)}
-    className="text-[8px] font-black bg-purple-700 text-white px-2 py-1 rounded-lg uppercase flex items-center gap-1 cursor-pointer hover:bg-purple-900"
-  >
+  <button onClick={() => setBossJournalStation(station)}
+    className="text-[10px] font-black bg-purple-600 hover:bg-purple-800 text-white px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-sm">
     📔 Jurnal
   </button>
-  <span className="text-[8px] font-black bg-blue-900 text-white px-2 py-1 rounded-lg uppercase">
-    {sTasks.length} ta
-  </span>
 </div>
               </div>
 
-              {/* ISHLAR JADVALI */}
-              {sTasks.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[10px] sm:text-xs font-bold">
-                    <thead className="bg-slate-100 text-slate-500 uppercase border-b text-[8px] sm:text-[10px]">
-                      <tr>
-                        <th className="p-2 sm:p-3">Ish nomi</th>
-                        <th className="p-2 sm:p-3">Bajardi</th>
-                        <th className="p-2 sm:p-3">Vaqt</th>
-                        <th className="p-2 sm:p-3 text-center">Holat</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {sTasks.map(task => (
-                        <tr key={task.id} className="hover:bg-blue-50/50 transition-colors text-slate-800">
-<td className="p-2 sm:p-3 text-[9px] sm:text-xs leading-tight">
-  <span>{task.name}</span>
-  {task.nsh && (
-    <span className="ml-2 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[8px] font-black border border-blue-200">
-      📋 {task.nsh}
-    </span>
-  )}
-</td>
-                          <td className="p-2 sm:p-3 text-blue-900 text-[9px] sm:text-xs whitespace-nowrap">{task.worker_id}</td>
-                          <td className="p-2 sm:p-3 text-slate-500 font-mono text-[8px] sm:text-[10px] whitespace-nowrap">
-                            {formatFullDateTime(task.start_time)}
-                          </td>
-                          <td className="p-2 sm:p-3 text-center">
-                            <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg text-[7px] sm:text-[8px] font-black uppercase whitespace-nowrap ${
-                              task.status === 'completed'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-orange-100 text-orange-700 animate-pulse'
-                            }`}>
-                              {task.status === 'completed' ? '✅' : '⏳'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="p-6 text-center text-slate-400 font-bold text-xs">
-                  Bu bekatda hozircha ishlar yo'q
-                </div>
-              )}
+{sTasks.length > 0 ? (
+  <div className="p-3 grid gap-2">
+    {sTasks.map(task => (
+      <div key={task.id} className={`rounded-2xl p-3 border ${
+        task.status === 'completed'
+          ? 'bg-green-50 border-green-100'
+          : 'bg-orange-50 border-orange-100'
+      }`}>
+        {/* Yuqori qator — holat + vaqt */}
+        <div className="flex items-center justify-between mb-2">
+          <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase ${
+            task.status === 'completed'
+              ? 'bg-green-200 text-green-800'
+              : 'bg-orange-200 text-orange-800 animate-pulse'
+          }`}>
+            {task.status === 'completed' ? '✅ Bajarildi' : '⏳ Jarayonda'}
+          </span>
+          <span className="text-[8px] font-bold text-slate-400">
+            🕐 {formatFullDateTime(task.start_time)}
+          </span>
+        </div>
+
+        {/* Ish nomi */}
+        <p className="text-xs font-black text-slate-800 leading-snug mb-2">{task.name}</p>
+
+        {/* Pastki qator — ishchi + teglar */}
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="bg-blue-900 text-white px-2 py-0.5 rounded-lg text-[8px] font-black">
+            👤 {task.worker_id}
+          </span>
+          {task.nsh && (
+            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg text-[8px] font-black border border-blue-200">
+              📋 {task.nsh}
+            </span>
+          )}
+          {task.bolim && (
+            <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-lg text-[8px] font-black border border-purple-200">
+              📁 {task.bolim}
+            </span>
+          )}
+          {task.davriylik && (
+            <span className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded-lg text-[8px] font-black border border-teal-200">
+              🔄 {task.davriylik}
+            </span>
+          )}
+          {task.jurnal && (
+            <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-lg text-[8px] font-black border border-indigo-200">
+              📔 {task.jurnal}
+            </span>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+) : (
+  <div className="py-6 text-center text-slate-300 font-bold text-xs">
+    Hozircha ishlar yo'q
+  </div>
+)}
             </div>
           );
         })}
       </div>
+
       {/* ISHCHILAR MODALI */}
       {bossStationWorkers && (
-        <div className="fixed inset-0 bg-black/70 z-200 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="flex justify-between items-center px-6 py-4 border-b bg-slate-50">
-              <h3 className="font-black text-slate-800 uppercase">
-                👥 {bossStationWorkers} — Ishchilar
-              </h3>
-              <button onClick={() => setBossStationWorkers(null)} className="bg-slate-100 p-2 rounded-full cursor-pointer">
-                <X size={20}/>
+        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden flex flex-col max-h-[85vh] shadow-2xl">
+            <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-white">
+                <div className="bg-white/20 p-2 rounded-xl">
+                  <User size={18}/>
+                </div>
+                <h3 className="font-black uppercase text-sm">{bossStationWorkers} — Ishchilar</h3>
+              </div>
+              <button onClick={() => setBossStationWorkers(null)} className="bg-white/20 hover:bg-white/30 p-2 rounded-full cursor-pointer text-white transition-all">
+                <X size={18}/>
               </button>
             </div>
-            <div className="overflow-y-auto p-4 space-y-3">
+            <div className="overflow-y-auto p-4 space-y-3 bg-slate-50">
               {stationWorkers.length === 0 ? (
-                <p className="text-center py-8 text-slate-400 font-bold">Ishchilar yo'q</p>
+                <div className="py-12 text-center">
+                  <p className="text-4xl mb-3">👥</p>
+                  <p className="text-slate-400 font-bold text-sm">Ishchilar yo'q</p>
+                </div>
               ) : (
                 stationWorkers.map(w => (
-                  <div key={w.id} className="bg-white border-2 border-slate-100 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
-                    <div className="bg-purple-100 p-3 rounded-full">
+                  <div key={w.id} className="bg-white border border-slate-100 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+                    <div className="bg-gradient-to-br from-purple-100 to-purple-200 p-3 rounded-2xl">
                       <User size={22} className="text-purple-700"/>
                     </div>
-                    <div>
-                      <p className="font-black text-base">{w.full_name}</p>
+                    <div className="flex-1">
+                      <p className="font-black text-sm">{w.full_name}</p>
                       <p className="text-xs font-bold text-slate-500 mt-0.5">{ROLE_NAMES[w.role] || w.role}</p>
-                      <p className="text-xs font-bold text-purple-700">📍 {w.station}</p>
+                      <p className="text-xs font-bold text-purple-600 mt-0.5">📍 {w.station}</p>
                       {w.phone && (
-                        <p className="text-xs font-bold text-green-700">📞 {w.phone}</p>
+                        <a href={`tel:${w.phone}`} className="text-xs font-black text-green-600 mt-0.5 flex items-center gap-1 hover:underline">
+                          📞 {w.phone}
+                        </a>
                       )}
                     </div>
                   </div>

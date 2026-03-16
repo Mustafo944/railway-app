@@ -1,6 +1,8 @@
 "use client"
 import { useState, useMemo } from 'react';
-import { ArrowLeft, History } from 'lucide-react';
+import { ArrowLeft, History, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const OY_NOMLARI = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
 
@@ -31,26 +33,91 @@ export default function ArchiveView({
   };
 
   const handleBack = () => {
-    if (selectedArchiveViewDate) { setSelectedArchiveViewDate(null); }
-    else if (selectedMonth) { setSelectedMonth(null); }
+    if (selectedArchiveViewDate) setSelectedArchiveViewDate(null);
+    else if (selectedMonth) setSelectedMonth(null);
   };
 
   const step = selectedArchiveViewDate ? 'records' : selectedMonth ? 'days' : 'months';
 
-  return (
-    <div className="space-y-6 animate-in slide-in-from-right duration-500">
+  // PDF yordamchi
+  const buildRows = (items) => items.map((t, i) => [
+    i + 1,
+    t.name,
+    t.worker_id,
+    t.bolim || '-',
+    t.davriylik || '-',
+    t.jurnal || '-',
+    formatFullDateTime(t.start_time),
+    formatFullDateTime(t.end_time),
+  ]);
 
-      {/* ORTGA */}
-      <button
-        onClick={() => step !== 'months' ? handleBack() : setView('dashboard')}
-        className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
-      >
-        <ArrowLeft size={16}/>
-        {step === 'months' ? 'Ortga' : step === 'days' ? 'Oylar' : 'Kunlar'}
-      </button>
+  const createPDF = (title) => {
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(14);
+    doc.text(`${selectedStation} — Ishlar arxivi`, 14, 15);
+    doc.setFontSize(10);
+    doc.text(title, 14, 23);
+    return doc;
+  };
+
+  const addTable = (doc, rows) => {
+    autoTable(doc, {
+      startY: 30,
+      head: [['#', 'Ish nomi', 'Bajardi', "Bo'lim", 'Davriylik', 'Jurnal', 'Boshlandi', 'Tugadi']],
+      body: rows,
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [239, 246, 255] },
+      columnStyles: { 1: { cellWidth: 70 } },
+    });
+    return doc;
+  };
+
+  const downloadAllPDF = () => {
+    const all = groupedArchive.flatMap(([, ishlar]) => ishlar);
+    const doc = createPDF('Barcha ishlar');
+    addTable(doc, buildRows(all)).save(`${selectedStation}-ishlar-barchasi.pdf`);
+  };
+
+  const downloadMonthPDF = () => {
+    const all = daysInMonth.flatMap(([, ishlar]) => ishlar);
+    const doc = createPDF(`Oy: ${formatMonth(selectedMonth)}`);
+    addTable(doc, buildRows(all)).save(`${selectedStation}-ishlar-${selectedMonth}.pdf`);
+  };
+
+  const downloadDayPDF = () => {
+    const all = groupedArchive.find(([sana]) => sana === selectedArchiveViewDate)?.[1] || [];
+    const label = new Date(selectedArchiveViewDate).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const doc = createPDF(`Sana: ${label}`);
+    addTable(doc, buildRows(all)).save(`${selectedStation}-ishlar-${selectedArchiveViewDate}.pdf`);
+  };
+
+  return (
+    <div className="space-y-4 animate-in slide-in-from-right duration-500">
+
+      {/* YUQORI QISM */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => step !== 'months' ? handleBack() : setView('dashboard')}
+          className="bg-white text-blue-900 font-black flex items-center gap-2 px-6 py-3 rounded-2xl shadow border-2 border-blue-900 hover:bg-blue-50 transition cursor-pointer text-[10px] uppercase"
+        >
+          <ArrowLeft size={16}/>
+          {step === 'months' ? 'Ortga' : step === 'days' ? 'Oylar' : 'Kunlar'}
+        </button>
+
+        {/* PDF tugmasi */}
+        {archive.length > 0 && (
+          <button
+            onClick={step === 'months' ? downloadAllPDF : step === 'days' ? downloadMonthPDF : downloadDayPDF}
+            className="bg-blue-900 text-white px-4 py-3 rounded-2xl font-black text-xs flex items-center gap-2 cursor-pointer hover:bg-blue-800"
+          >
+            <Download size={14}/> PDF
+          </button>
+        )}
+      </div>
 
       {/* SARLAVHA */}
-      <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 uppercase tracking-tighter leading-none">
+      <h2 className="text-xl font-black flex items-center gap-2 text-slate-800 uppercase tracking-tighter leading-none">
         <History className="text-blue-900" />
         {step === 'months' && `Ishlar arxivi: ${selectedStation}`}
         {step === 'days' && `📅 ${formatMonth(selectedMonth)}`}
@@ -83,7 +150,7 @@ export default function ArchiveView({
         ))
 
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 pb-6">
           {(groupedArchive.find(([sana]) => sana === selectedArchiveViewDate)?.[1] || []).map((item, index) => (
             <div key={`archive-${item.id}-${index}`} className="bg-white p-5 rounded-3xl border-l-4 border-l-green-600 shadow-md text-slate-800">
               <p className="font-black text-sm leading-tight">{item.name}</p>

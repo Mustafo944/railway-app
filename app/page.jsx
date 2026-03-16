@@ -490,8 +490,10 @@ supabase
       }
     }
   });
-        if (data.role === 'boss' || data.role === 'admin') {
+if (data.role === 'boss' || data.role === 'admin') {
   setView('boss_dashboard');
+  loadAllTasks();
+  loadWorkers();
 const today = new Date().toISOString().slice(0, 10);
 supabase.from('tasks').select('*')
   .gte('start_time', today + 'T00:00:00')
@@ -549,6 +551,7 @@ const handleLogin = async (e) => {
 if (userObj.role === 'boss' || userObj.role === 'admin') {
   setView('boss_dashboard');
   loadAllTasks();
+  loadWorkers();
 } else {
   setView('menu');
 }
@@ -766,7 +769,7 @@ const groupedArchive = useMemo(() => {
         <header className="bg-blue-900 text-white p-3 sticky top-0 z-10 shadow-lg">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3">
-<img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
+<img src="/logo.png" alt="Logo" className="w-20 h-20 object-contain" />
               <div className="flex flex-col leading-none">
 <div className="flex items-center gap-1.5">
   {activeFaults.length > 0 && (
@@ -779,9 +782,12 @@ const groupedArchive = useMemo(() => {
     SHCH BUXORO
   </span>
 </div>
-                <span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest leading-none mt-1">
-                  {selectedStation || currentWorker?.full_name}
-                </span>
+<span className="text-[10px] text-blue-300 font-bold uppercase tracking-widest leading-none mt-1">
+  {(currentWorker?.role === 'boss' || currentWorker?.role === 'admin' || 
+    currentWorker?.role === 'bosh_muhandis' || currentWorker?.role === 'boshliq_muovini')
+    ? currentWorker?.full_name
+    : selectedStation || currentWorker?.full_name}
+</span>
               </div>
             </div>
  <div className="flex gap-2 justify-evenly">
@@ -808,9 +814,9 @@ const groupedArchive = useMemo(() => {
     setView('login'); 
     toast.success("Tizimdan chiqildi."); 
   }}
-  className="bg-red-600 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] sm:text-xs cursor-pointer shadow-md transition-all"
+  className="bg-white/15 hover:bg-white/25 backdrop-blur border border-white/30 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-black text-[10px] sm:text-xs cursor-pointer shadow-lg transition-all active:scale-95"
 >
-  Chiqish
+Chiqish
 </button>
 
 </div>
@@ -819,44 +825,75 @@ const groupedArchive = useMemo(() => {
       )}
 
       <main className="max-w-6xl mx-auto p-4 sm:p-6">
-        {view === 'login' && (
-          <div className="flex items-center justify-center min-h-[80vh]">
-            <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border-t-12px border-blue-900 text-center">
-<img src="/logo.png" alt="Logo" className="w-48 h-48 object-contain mb-2 mx-auto" />
-<p className="text-2xl font-black text-blue-900 uppercase tracking-widest mb-6">SHCH BUXORO</p>
-              <h2 className="text-3xl font-black mb-8 text-slate-800 tracking-tighter uppercase">Kirish</h2>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <input 
-                  type="text" 
-                  placeholder="ID raqami" 
-                  required 
-                  className="w-full p-4 border-2 rounded-2xl outline-none focus:border-blue-900 bg-slate-50 font-bold cursor-text" 
-                  value={loginId} 
-                  onChange={(e) => setLoginId(e.target.value)}
-                />
-                <div className="relative">
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="Parol" 
-                    required 
-                    className="w-full p-4 border-2 rounded-2xl outline-none focus:border-blue-900 bg-slate-50 font-bold cursor-text" 
-                    value={loginPass} 
-                    onChange={(e) => setLoginPass(e.target.value)}
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => setShowPassword(!showPassword)} 
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-900 cursor-pointer p-1"
-                  >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
-                </div>
-                {authError && <div className="text-red-600 font-black text-xs uppercase">{authError}</div>}
-                <button className="w-full bg-blue-900 text-white py-5 rounded-2xl font-black text-xl shadow-xl active:scale-95 transition-all cursor-pointer uppercase tracking-widest">KIRISH</button>
-              </form>
-            </div>
+{view === 'login' && (
+  <div className="flex items-center justify-center min-h-[90vh]">
+    <div className="w-full max-w-sm">
+      
+      {/* Yuqori qism — gradient */}
+      <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 rounded-3xl p-8 text-white text-center shadow-2xl mb-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-16 translate-x-16"/>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-12 -translate-x-12"/>
+        <div className="relative">
+<img src="/logo.png" alt="Logo" className="w-64 h-64 object-contain mb-2 mx-auto" />
+          <h1 className="text-2xl font-black uppercase tracking-widest">SHCH BUXORO</h1>
+          <p className="text-blue-300 text-xs font-bold mt-1 uppercase tracking-widest">Monitoring tizimi</p>
+        </div>
+      </div>
+
+      {/* Forma */}
+      <div className="bg-white rounded-3xl shadow-xl p-6">
+        <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-5 text-center">Tizimga kirish</h2>
+        
+        <form onSubmit={handleLogin} className="space-y-3">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">👤</span>
+            <input
+              type="text"
+              placeholder="ID raqami"
+              required
+              className="w-full pl-11 pr-4 py-4 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-900 bg-slate-50 font-bold cursor-text text-sm transition-all"
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
+            />
           </div>
-        )}
+
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔒</span>
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Parol"
+              required
+              className="w-full pl-11 pr-12 py-4 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-900 bg-slate-50 font-bold cursor-text text-sm transition-all"
+              value={loginPass}
+              onChange={(e) => setLoginPass(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-900 cursor-pointer p-1 transition-colors"
+            >
+              {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+            </button>
+          </div>
+
+          {authError && (
+            <div className="bg-red-50 border border-red-200 text-red-600 font-black text-xs uppercase p-3 rounded-xl text-center">
+              ⚠️ {authError}
+            </div>
+          )}
+
+          <button className="w-full bg-gradient-to-r from-blue-900 to-blue-700 text-white py-4 rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all cursor-pointer uppercase tracking-widest mt-2 hover:from-blue-800 hover:to-blue-600">
+            Kirish →
+          </button>
+        </form>
+      </div>
+
+      <p className="text-center text-slate-400 text-[10px] font-bold mt-4 uppercase tracking-widest">
+        © 2025 SHCH Buxoro
+      </p>
+    </div>
+  </div>
+)}
 
 {view === 'boss_dashboard' && (
 <BossDashboard
@@ -876,76 +913,113 @@ const groupedArchive = useMemo(() => {
   />
 )}
 {view === 'menu' && menuView === 'main' && (
-  <div className="pt-6 pb-24 animate-in fade-in duration-500">
+  <div className="pt-4 pb-24 animate-in fade-in duration-500">
 
     {currentWorker?.station?.includes(',') ? (
       // KO'P BEKAT
-      <div className="flex gap-4 justify-center flex-wrap">
-        {currentWorker.station.split(',').map(s => (
-          <div key={s} className="bg-white rounded-3xl shadow-xl border-2 border-slate-100 overflow-hidden w-72">
-            <div className="bg-blue-900 text-white px-4 py-4 text-center">
-              <p className="text-[9px] font-black uppercase tracking-widest text-blue-300 mb-1">Bekat</p>
-              <h2 className="text-sm font-black uppercase tracking-tighter flex items-center gap-1 justify-center">
-                <MapPin size={14}/> {s}
-              </h2>
-              <p className="text-[10px] text-blue-200 mt-1 font-bold">{currentWorker?.full_name}</p>
+      <div>
+        {/* Salom banner */}
+        <div className="mb-6 bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-5 text-white shadow-xl">
+          <p className="text-xs text-blue-300 font-bold uppercase tracking-widest">Xush kelibsiz</p>
+          <h1 className="text-xl font-black mt-1">{currentWorker?.full_name}</h1>
+          <p className="text-xs text-blue-200 mt-1 font-bold">
+            📍 {currentWorker.station.split(',').map(s => s.trim()).join(' • ')}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {currentWorker.station.split(',').map(s => s.trim()).map(s => (
+            <div key={s} className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
+              {/* Bekat header */}
+              <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="bg-white/20 p-2 rounded-xl">
+                    <MapPin size={16} className="text-white"/>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-blue-300 font-black uppercase tracking-widest">Bekat</p>
+                    <h2 className="text-sm font-black text-white uppercase">{s}</h2>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tugmalar */}
+              <div className="grid grid-cols-2 gap-2 p-3">
+                <button onClick={() => { setSelectedStation(s); loadStationData(s); setView('dashboard'); }}
+                  className="group bg-blue-50 hover:bg-blue-900 border-2 border-blue-100 hover:border-blue-900 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
+                  <div className="text-2xl group-hover:scale-110 transition-transform">📋</div>
+                  <p className="font-black text-[9px] uppercase text-center text-blue-900 group-hover:text-white">Ish grafigi</p>
+                </button>
+
+                <button onClick={() => { setSelectedStation(s); setMenuView('fault'); }}
+                  className="group bg-red-50 hover:bg-red-600 border-2 border-red-100 hover:border-red-600 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
+                  <div className="text-2xl group-hover:scale-110 transition-transform">🚨</div>
+                  <p className="font-black text-[9px] uppercase text-center text-red-700 group-hover:text-white">Nosozlik</p>
+                </button>
+
+                <button onClick={() => { setSelectedStation(s); setMenuView('journal'); }}
+                  className="group bg-indigo-50 hover:bg-indigo-700 border-2 border-indigo-100 hover:border-indigo-700 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
+                  <div className="text-2xl group-hover:scale-110 transition-transform">📔</div>
+                  <p className="font-black text-[9px] uppercase text-center text-indigo-700 group-hover:text-white">Jurnallar</p>
+                </button>
+
+                <button onClick={() => { setSelectedStation(s); loadWorkers(); setMenuView('workers'); }}
+                  className="group bg-purple-50 hover:bg-purple-700 border-2 border-purple-100 hover:border-purple-700 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
+                  <div className="text-2xl group-hover:scale-110 transition-transform">👥</div>
+                  <p className="font-black text-[9px] uppercase text-center text-purple-700 group-hover:text-white">Ishchilar</p>
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 p-3">
-              <button onClick={() => { setSelectedStation(s); loadStationData(s); setView('dashboard'); }}
-                className="bg-slate-50 border-2 border-blue-100 hover:bg-blue-900 hover:text-white p-3 rounded-2xl flex flex-col items-center gap-2 cursor-pointer group transition-all">
-                <span className="text-xl">📋</span>
-                <p className="font-black text-[9px] uppercase text-center">Ish grafigi</p>
-              </button>
-              <button onClick={() => { setSelectedStation(s); setMenuView('fault'); }}
-                className="bg-slate-50 border-2 border-red-100 hover:bg-red-600 hover:text-white p-3 rounded-2xl flex flex-col items-center gap-2 cursor-pointer group transition-all">
-                <span className="text-xl">🚨</span>
-                <p className="font-black text-[9px] uppercase text-center">Nosozlik</p>
-              </button>
-              <button onClick={() => { setSelectedStation(s); setMenuView('journal'); }}
-                className="bg-slate-50 border-2 border-indigo-100 hover:bg-indigo-700 hover:text-white p-3 rounded-2xl flex flex-col items-center gap-2 cursor-pointer group transition-all">
-                <span className="text-xl">📔</span>
-                <p className="font-black text-[9px] uppercase text-center">Jurnallar</p>
-              </button>
-<button onClick={() => { setSelectedStation(s); loadWorkers(); setMenuView('workers'); }}
-  className="bg-slate-50 border-2 border-purple-100 hover:bg-purple-700 hover:text-white p-3 rounded-2xl flex flex-col items-center gap-2 cursor-pointer group transition-all">
-  <span className="text-xl">👥</span>
-  <p className="font-black text-[9px] uppercase text-center">Ishchilar</p>
-</button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
     ) : (
       // BITTA BEKAT
       <div className="max-w-sm mx-auto">
-        <div className="bg-blue-900 text-white px-6 py-5 rounded-3xl shadow-2xl mb-6 text-center">
-          <p className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-1">Sizning bekat</p>
-          <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2 justify-center">
-            <MapPin size={22}/> {currentWorker?.station}
-          </h2>
-          <p className="text-sm text-blue-200 mt-1 font-bold">{currentWorker?.full_name}</p>
+
+        {/* Salom banner */}
+        <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 rounded-3xl p-6 text-white shadow-2xl mb-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8"/>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-8 -translate-x-8"/>
+          <div className="relative">
+            <p className="text-[10px] text-blue-300 font-black uppercase tracking-widest mb-1">Sizning bekat</p>
+            <h2 className="text-2xl font-black uppercase flex items-center gap-2">
+              <MapPin size={20}/> {currentWorker?.station}
+            </h2>
+            <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-2">
+              <div className="bg-white/20 p-1.5 rounded-lg">
+                <User size={14}/>
+              </div>
+              <p className="text-sm font-bold text-blue-100">{currentWorker?.full_name}</p>
+            </div>
+          </div>
         </div>
+
+        {/* Tugmalar */}
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => { setSelectedStation(currentWorker.station); loadStationData(currentWorker.station); setView('dashboard'); }}
-            className="bg-white border-2 border-blue-100 hover:bg-blue-900 hover:text-white hover:border-blue-900 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer group transition-all">
-            <div className="bg-blue-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl">📋</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center">Ish grafigini bajarish</p>
+            className="group bg-white hover:bg-blue-900 border-2 border-blue-100 hover:border-blue-900 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
+            <div className="bg-blue-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">📋</div>
+            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Ish grafigi</p>
           </button>
+
           <button onClick={() => setMenuView('fault')}
-            className="bg-white border-2 border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer group transition-all">
-            <div className="bg-red-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl">🚨</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center">Nosozlik haqida xabar</p>
+            className="group bg-white hover:bg-red-600 border-2 border-red-100 hover:border-red-600 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
+            <div className="bg-red-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">🚨</div>
+            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Nosozlik</p>
           </button>
+
           <button onClick={() => setMenuView('journal')}
-            className="bg-white border-2 border-indigo-100 hover:bg-indigo-700 hover:text-white hover:border-indigo-700 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer group transition-all">
-            <div className="bg-indigo-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl">📔</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center">Jurnallar</p>
+            className="group bg-white hover:bg-indigo-700 border-2 border-indigo-100 hover:border-indigo-700 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
+            <div className="bg-indigo-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">📔</div>
+            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Jurnallar</p>
           </button>
+
           <button onClick={() => { loadWorkers(); setMenuView('workers'); }}
-            className="bg-white border-2 border-purple-100 hover:bg-purple-700 hover:text-white hover:border-purple-700 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer group transition-all">
-            <div className="bg-purple-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl">👥</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center">Ishchilar ro'yxati</p>
+            className="group bg-white hover:bg-purple-700 border-2 border-purple-100 hover:border-purple-700 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
+            <div className="bg-purple-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">👥</div>
+            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Ishchilar</p>
           </button>
         </div>
       </div>
@@ -966,7 +1040,7 @@ const groupedArchive = useMemo(() => {
 {/* JURNAL SAHIFASI */}
 {view === 'menu' && menuView === 'journal' && (
   <JournalPage
-    station={currentWorker?.station}
+    station={selectedStation || currentWorker?.station}
     workerName={currentWorker?.full_name}
     onBack={() => setMenuView('main')}
     supabase={supabase}
