@@ -835,9 +835,9 @@ Chiqish
           </div>
         </header>
       )}
-<main className={`max-w-6xl mx-auto ${view !== 'login' ? 'p-4 sm:p-6' : ''}`}>
+<main className={`max-w-6xl mx-auto ${view !== 'login' ? 'p-4 sm:p-6' : 'px-4'}`}>
 {view === 'login' && (
-<div className="flex items-center justify-center min-h-[calc(100vh-2rem)] py-0">
+<div className="flex items-center justify-center min-h-screen py-6">
     <div className="w-full max-w-sm">
       
       {/* Yuqori qism — gradient */}
