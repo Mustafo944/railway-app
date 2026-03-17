@@ -168,6 +168,7 @@ export default function BossArchive({
                 {task.bolim && <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-lg text-[9px] font-black border border-purple-200">📁 {task.bolim}</span>}
                 {task.davriylik && <span className="bg-teal-100 text-teal-800 px-2 py-1 rounded-lg text-[9px] font-black border border-teal-200">🔄 {task.davriylik}</span>}
                 {task.jurnal && <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-lg text-[9px] font-black border border-indigo-200">📔 {task.jurnal}</span>}
+                {task.confirmed_by && <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded-lg text-[9px] font-black border border-amber-200">🛡 Tasdiqladi: {task.confirmed_by}</span>}
               </div>
             </div>
           ))}

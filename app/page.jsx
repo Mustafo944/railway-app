@@ -108,6 +108,7 @@ const [editRole, setEditRole] = useState('');
 const [menuView, setMenuView] = useState('main'); // 'main' | 'fault' | 'journal' | 'workers'
 const [newWorkerPhone, setNewWorkerPhone] = useState('');
 const [editPhone, setEditPhone] = useState('');
+const [currentTime, setCurrentTime] = useState(new Date());
 const loadWorkers = useCallback(async () => {
   const { data } = await supabase.from('allowed_emails').select('*');
   if (data) {
@@ -128,40 +129,73 @@ const loadWorkers = useCallback(async () => {
 
 const loadAllTasks = useCallback(async () => {
   const today = new Date().toISOString().slice(0, 10);
-  const { data } = await supabase
-    .from('tasks')
-    .select('*')
-    .gte('start_time', today + 'T00:00:00')
-    .lte('start_time', today + 'T23:59:59')
-    .order('created_at', { ascending: false });
-  if (data) setAllTasksForBoss(data);
-}, []);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
+  const [{ data: todayData }, { data: unconfirmedData }, { data: unfinishedData }] = await Promise.all([
+    // Bugungi barcha ishlar
+    supabase.from('tasks').select('*')
+      .gte('start_time', today + 'T00:00:00')
+      .lte('start_time', today + 'T23:59:59')
+      .order('created_at', { ascending: false }),
+    // 1 kundan oshgan tasdiqlanmagan ishlar (mexanik bajardi, boshlig' tasdiqlamadi)
+    supabase.from('tasks').select('*')
+      .eq('status', 'pending')
+      .eq('completed_by_worker', true)
+      .eq('confirmed', false)
+      .lt('start_time', today + 'T00:00:00')
+      .order('created_at', { ascending: false }),
+    // 1 kundan oshgan bajarilmagan ishlar
+    supabase.from('tasks').select('*')
+      .eq('status', 'pending')
+      .or('completed_by_worker.eq.false,completed_by_worker.is.null')
+      .lt('start_time', today + 'T00:00:00')
+      .order('created_at', { ascending: false })
+  ]);
+
+  const merged = [...(todayData || [])];
+  [...(unconfirmedData || []), ...(unfinishedData || [])].forEach(t => {
+    if (!merged.some(m => m.id === t.id)) merged.push(t);
+  });
+  setAllTasksForBoss(merged);
+}, []);
 const stationCache = useRef({});
+const confirmedTasks = useRef(new Set());
 
-const loadStationData = useCallback(async (station) => {
+const loadStationData = useCallback(async (station, worker) => {
+  if (stationCache.current[station]) {
+    setActiveTasks(stationCache.current[station].active);
+    setArchive(stationCache.current[station].archive);
+    setIsLoadingTasks(false);
+    fetchStationData(station, worker);
+    return;
+  }
   setIsLoadingTasks(true);
-  await fetchStationData(station);
+  await fetchStationData(station, worker);
 }, []);
 
-const fetchStationData = async (station) => {
+const fetchStationData = async (station, worker) => {
+  const w = worker || currentWorker;
+  const isBoshligRole = w?.role === 'bekat_boshlig';
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: activaData }, { data: archiveData }] = await Promise.all([
-    supabase.from('tasks').select('*')
+  const [{ data: activeData }, { data: archiveData }] = await Promise.all([
+isBoshligRole
+  ? supabase.from('tasks').select('*')
+      .eq('station', station)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+  : supabase.from('tasks').select('*')
       .eq('station', station).eq('status', 'pending')
       .gte('start_time', today + 'T00:00:00')
       .lte('start_time', today + 'T23:59:59')
       .order('created_at', { ascending: false }),
     supabase.from('tasks').select('*')
-      .eq('station', station).eq('status', 'completed')
-      .order('end_time', { ascending: false })
-      .limit(30)
+      .eq('station', station).eq('status', 'completed').eq('confirmed', true)
+      .order('end_time', { ascending: false }).limit(30)
   ]);
 
-  const active = activaData || [];
+  const active = activeData || [];
   const archive = archiveData || [];
-
   stationCache.current[station] = { active, archive };
   setActiveTasks(active);
   setArchive(archive);
@@ -204,13 +238,9 @@ const loadBossArchive = async (station) => {
   setBossArchiveDates([]);
   setSelectedArchiveDate(null);
 
-  const { data } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('station', station)
-    .eq('status', 'completed')
-    .order('end_time', { ascending: false })
-    .limit(100);
+const { data } = await supabase.from('tasks').select('*')
+  .eq('station', station).eq('status', 'completed').eq('confirmed', true)
+  .order('end_time', { ascending: false }).limit(100);
   
   if (data) {
     const grouped = {};
@@ -366,21 +396,28 @@ useEffect(() => {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tasks' },
       (payload) => {
         const newTask = payload.new;
-        setAllTasksForBoss(prev => {
-          if (prev.some(t => t.id === newTask.id)) return prev;
-          return [newTask, ...prev];
-        });
-        setSelectedStation(curr => {
-          if (newTask.station === curr) {
-            setActiveTasks(prev => {
-              if (prev.some(t => t.id === newTask.id)) return prev;
-              return [newTask, ...prev];
-            });
-          }
-          return curr;
-        });
+        stationCache.current[newTask.station] = null;
+        setTimeout(() => {
+          setAllTasksForBoss(prev => {
+            if (prev.some(t => t.id === newTask.id)) return prev;
+            return [newTask, ...prev];
+          });
+        }, 0);
+        setTimeout(() => {
+          setSelectedStation(curr => {
+            if (newTask.station === curr) {
+              setActiveTasks(prev => {
+                if (prev.some(t => t.id === newTask.id)) return prev;
+                return [newTask, ...prev];
+              });
+            }
+            return curr;
+          });
+        }, 0);
         setCurrentWorker(curr => {
-          if (curr?.role === 'boss') toast.success("Yangi ish qo'shildi");
+          if (curr?.role === 'boss' || curr?.role === 'admin') {
+            setTimeout(() => toast.success("Yangi ish qo'shildi"), 0);
+          }
           return curr;
         });
       }
@@ -388,63 +425,91 @@ useEffect(() => {
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tasks' },
       (payload) => {
         const updatedTask = payload.new;
-        setAllTasksForBoss(prev =>
-          prev.map(t => t.id === updatedTask.id ? updatedTask : t)
-        );
-        setSelectedStation(curr => {
-          if (updatedTask.station === curr && updatedTask.status === "completed") {
-            setActiveTasks(prev => prev.filter(t => t.id !== updatedTask.id));
-            setArchive(prev => [updatedTask, ...prev]);
+        stationCache.current[updatedTask.station] = null;
+        setTimeout(() => {
+          setAllTasksForBoss(prev =>
+            prev.map(t => t.id === updatedTask.id ? updatedTask : t)
+          );
+        }, 0);
+        setTimeout(() => {
+          setSelectedStation(s => {
+            if (updatedTask.station === s) {
+              const isBoshligRole = updatedTask.completed_by_worker === true && updatedTask.status === 'pending';
+              if (isBoshligRole) {
+                setActiveTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+              }
+              if (updatedTask.status === 'completed' && updatedTask.confirmed === true) {
+                if (!confirmedTasks.current.has(updatedTask.id)) {
+                  confirmedTasks.current.add(updatedTask.id);
+                  setActiveTasks(prev => prev.filter(t => t.id !== updatedTask.id));
+                  setArchive(prev => [updatedTask, ...prev]);
+                  setCurrentWorker(curr => {
+                    if (curr?.role !== 'bekat_boshlig') {
+                      setTimeout(() => toast.success('✅ Ish tasdiqlandi!', { id: `confirmed-${updatedTask.id}` }), 0);
+                    }
+                    return curr;
+                  });
+                }
+              }
+            }
+            return s;
+          });
+        }, 0);
+      }
+    )
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'faults' },
+      (payload) => {
+        const fault = payload.new;
+        setTimeout(() => {
+          setActiveFaults(prev => prev.some(f => f.id === fault.id) ? prev : [...prev, fault]);
+        }, 0);
+        setTimeout(() => loadFaultStats(), 0);
+        setCurrentWorker(curr => {
+          if (curr?.role === "boss" || curr?.role === "admin") {
+            const seenFaults = JSON.parse(localStorage.getItem('seen_faults') || '[]');
+            if (!seenFaults.includes(fault.id)) {
+              setTimeout(() => setShowBigAlert(true), 0);
+            }
+            setTimeout(() => toast.error("🚨 NOSOZLIK KELIB TUSHDI!", { id: `fault-${fault.id}` }), 0);
+            setTimeout(() => playAlertSound(), 0);
+          } else {
+            setSelectedStation(s => {
+              if (fault.station === s) {
+                setTimeout(() => toast.error(`🚨 Nosozlik: ${fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}`, { id: `fault-${fault.id}` }), 0);
+              }
+              return s;
+            });
           }
           return curr;
         });
       }
     )
-.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'faults' },
-  (payload) => {
-    const fault = payload.new;
-    setActiveFaults(prev => {
-      if (prev.some(f => f.id === fault.id)) return prev;
-      return [...prev, fault];
-    });
-    setCurrentWorker(curr => {
-if (curr?.role === "boss" || curr?.role === "admin") {
-  const seenFaults = JSON.parse(localStorage.getItem('seen_faults') || '[]');
-  if (!seenFaults.includes(fault.id)) {
-    setShowBigAlert(true);
-  }
-        setTimeout(() => toast.error("🚨 NOSOZLIK KELIB TUSHDI!", { id: `fault-${fault.id}` }), 0);
-        setTimeout(() => playAlertSound(), 0);
-      } else if (curr?.role === "worker") {
-        setSelectedStation(s => {
-          if (fault.station === s) {
-            setTimeout(() => toast.error(`🚨 Nosozlik: ${fault.reason === "Boshqa" ? fault.custom_reason : fault.reason}`, { id: `fault-${fault.id}` }), 0);
-          }
-          return s;
-        });
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'faults' },
+      (payload) => {
+        const fault = payload.new;
+        setTimeout(() => {
+          setActiveFaults(prev => {
+            if (fault.confirmed === true) {
+              const updated = prev.filter(f => f.id !== fault.id);
+              if (updated.length === 0) setTimeout(() => setShowBigAlert(false), 0);
+              return updated;
+            }
+            const exists = prev.some(f => f.id === fault.id);
+            if (!exists) return [...prev, fault];
+            return prev.map(f => f.id === fault.id ? fault : f);
+          });
+        }, 0);
+        setTimeout(() => loadFaultStats(), 0);
       }
-      return curr;
-    });
-  }
-)
-.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'faults' },
-  (payload) => {
-    const fault = payload.new;
-    if (fault.status === "resolved") {
-      setActiveFaults(prev => {
-        const updated = prev.filter(f => f.id !== fault.id);
-        if (updated.length === 0) setShowBigAlert(false);
-        return updated;
-      });
-    }
-  }
-)
+    )
     .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []); // Bo'sh array — faqat 1 marta ochiladi!
+  return () => { supabase.removeChannel(channel); };
+}, []);// Bo'sh array — faqat 1 marta ochiladi!
+useEffect(() => {
+  const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+  return () => clearInterval(timer);
+}, []);
 useEffect(() => {
   const savedUser = localStorage.getItem('railway_user');
   const savedStation = localStorage.getItem('railway_station');
@@ -476,7 +541,7 @@ useEffect(() => {
 supabase
   .from('faults')
   .select('*')
-  .eq('status', 'active')
+  .or('status.eq.active,and(status.eq.resolved,confirmed.eq.false)')
   .order('created_at', { ascending: false })
   .then(({ data: faultData }) => {
     if (faultData) {
@@ -508,7 +573,7 @@ supabase.from('tasks').select('*')
   } else if (savedStation) {
     setSelectedStation(savedStation);
     setView('dashboard');
-    loadStationData(savedStation);
+loadStationData(savedStation, data);
   } else {
     setView('station');
   }
@@ -674,22 +739,21 @@ const newTask = {
   setIsSubmitting(false);
 };
 const finishTask = async (taskId) => {
-  const { error } = await supabase.from('tasks').update({ 
-    status: 'completed', 
-    end_time: new Date().toISOString() 
-  })
-  .eq('id', taskId)
-  .eq('station', selectedStation);
-    
-  if (error) {
-    toast.error("Ishni yakunlashda xato!");
-    return;
-  }
-  toast.success("Ish muvaffaqiyatli yakunlandi!");
-  setConfirmFinishTask(null);
-  setPhotoConfirmed(false);
-};
+const { error } = await supabase.from('tasks').update({ 
+  completed_by_worker: true,
+  completed_by: currentWorker?.full_name,
+}).eq('id', taskId).eq('station', selectedStation);
 
+if (error) { toast.error("Ishni yakunlashda xato!"); return; }
+toast.success("Ish bajarildi! Bekat boshlig'i tasdiqlashini kuting.");
+setConfirmFinishTask(null);
+setPhotoConfirmed(false);
+// activeTasks dan olib tashlamaymiz — pending qoladi, faqat completed_by_worker=true
+setActiveTasks(prev => prev.map(t => t.id === taskId 
+  ? { ...t, completed_by_worker: true, completed_by: currentWorker?.full_name }
+  : t
+));
+};
 const sendFault = async () => {
   if (isSubmitting) return;
   setIsSubmitting(true);
@@ -770,26 +834,36 @@ const groupedArchive = useMemo(() => {
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3">
 <div className="relative shrink-0">
-  <div className="w-11 h-11 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20">
+  <div className="w-11 h-11 bg-linear-to-br from-yellow-400 to-amber-500 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20">
     <ShieldCheck size={24} className="text-blue-900" strokeWidth={2.5}/>
   </div>
-  {activeFaults.length > 0 && (
+{(() => {
+  const visibleFaults = (currentWorker?.role === 'boss' || currentWorker?.role === 'admin')
+    ? activeFaults
+    : activeFaults.filter(f => f.station === (selectedStation || currentWorker?.station));
+  return visibleFaults.length > 0 ? (
     <>
       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-blue-900 animate-ping"/>
       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-blue-900 flex items-center justify-center">
-        <span className="text-white text-[7px] font-black">{activeFaults.length}</span>
+        <span className="text-white text-[7px] font-black">{visibleFaults.length}</span>
       </span>
     </>
-  )}
+  ) : null;
+})()}
 </div>
               <div className="flex flex-col leading-none">
 <div className="flex items-center gap-1.5">
-  {activeFaults.length > 0 && (
+{(() => {
+  const visibleFaults = (currentWorker?.role === 'boss' || currentWorker?.role === 'admin')
+    ? activeFaults
+    : activeFaults.filter(f => f.station === (selectedStation || currentWorker?.station));
+  return visibleFaults.length > 0 ? (
     <span className="relative flex h-3 w-3">
       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
       <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600 border border-white"></span>
     </span>
-  )}
+  ) : null;
+})()}
   <span className="text-[10px] text-yellow-300 font-black uppercase tracking-widest leading-none">
     SHCH BUXORO
   </span>
@@ -802,7 +876,16 @@ const groupedArchive = useMemo(() => {
 </span>
               </div>
             </div>
- <div className="flex gap-2 justify-evenly">
+<div className="hidden sm:flex flex-col items-center justify-center px-3 py-1 rounded-xl mr-2"
+  style={{background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)'}}>
+  <span className="text-white font-black text-base leading-none tracking-widest">
+    {currentTime.toLocaleTimeString('uz-UZ', {timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', second: '2-digit'})}
+  </span>
+  <span className="text-blue-300 font-bold text-[9px] uppercase tracking-widest mt-0.5">
+    {currentTime.toLocaleDateString('uz-UZ', {timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric'})}
+  </span>
+</div>
+<div className="flex gap-2 justify-evenly">
   {isAdmin && (
     <button 
       onClick={() => { setShowAdminPanel(true); loadWorkers(); }} 
@@ -840,8 +923,8 @@ Chiqish
 <div className="flex items-center justify-center min-h-screen py-6">
     <div className="w-full max-w-sm">
       
-      {/* Yuqori qism — gradient */}
-<div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 rounded-3xl p-4 text-white text-center shadow-2xl mb-3 relative overflow-hidden">
+      {/* Yuqori qism — linear */}
+<div className="bg-linear-to-br from-blue-900 via-blue-800 to-blue-700 rounded-3xl p-4 text-white text-center shadow-2xl mb-3 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-16 translate-x-16"/>
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-12 -translate-x-12"/>
         <div className="relative">
@@ -893,7 +976,7 @@ Chiqish
             </div>
           )}
 
-          <button className="w-full bg-gradient-to-r from-blue-900 to-blue-700 text-white py-4 rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all cursor-pointer uppercase tracking-widest mt-2 hover:from-blue-800 hover:to-blue-600">
+          <button className="w-full bg-linear-to-r from-blue-900 to-blue-700 text-white py-4 rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all cursor-pointer uppercase tracking-widest mt-2 hover:from-blue-800 hover:to-blue-600">
             Kirish →
           </button>
         </form>
@@ -924,60 +1007,90 @@ Chiqish
   />
 )}
 {view === 'menu' && menuView === 'main' && (
-  <div className="pt-4 pb-24 animate-in fade-in duration-500">
+  <div className="min-h-[85vh] flex flex-col items-center justify-center py-6 px-4 animate-in fade-in duration-700">
 
     {currentWorker?.station?.includes(',') ? (
-      // KO'P BEKAT
-      <div>
-        {/* Salom banner */}
-        <div className="mb-6 bg-gradient-to-r from-blue-900 to-blue-700 rounded-3xl p-5 text-white shadow-xl">
-          <p className="text-xs text-blue-300 font-bold uppercase tracking-widest">Xush kelibsiz</p>
-          <h1 className="text-xl font-black mt-1">{currentWorker?.full_name}</h1>
-          <p className="text-xs text-blue-200 mt-1 font-bold">
-            📍 {currentWorker.station.split(',').map(s => s.trim()).join(' • ')}
-          </p>
+      // ═══ KO'P BEKAT ═══
+      <div className="w-full max-w-3xl">
+        {/* Header */}
+        <div className="relative mb-8 rounded-[2rem] overflow-hidden" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #312e81 100%)'}}>
+          <div className="absolute inset-0" style={{backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(59,130,246,0.2) 0%, transparent 50%)'}}/>
+          <div className="absolute top-0 left-0 right-0 h-px" style={{background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)'}}/>
+          <div className="relative p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)'}}>
+                <User size={18} className="text-white"/>
+              </div>
+              <div>
+                <p className="text-blue-300 text-[10px] font-black uppercase tracking-[0.2em]">Xush kelibsiz</p>
+                <h1 className="text-white text-lg font-black">{currentWorker?.full_name}</h1>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {currentWorker.station.split(',').map(s => s.trim()).map(s => (
+                <span key={s} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black text-white" style={{background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)'}}>
+                  <MapPin size={9}/> {s}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {/* Bekat kartochkalari */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {currentWorker.station.split(',').map(s => s.trim()).map(s => (
-            <div key={s} className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
+            <div key={s} className="rounded-[1.5rem] overflow-hidden shadow-2xl" style={{background: '#fff', border: '1px solid rgba(0,0,0,0.06)'}}>
               {/* Bekat header */}
-              <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <div className="bg-white/20 p-2 rounded-xl">
-                    <MapPin size={16} className="text-white"/>
+              <div className="px-5 py-4 relative overflow-hidden" style={{background: 'linear-gradient(135deg, #1e3a8a, #3730a3)'}}>
+                <div className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-20" style={{background: 'radial-gradient(circle, white, transparent)', transform: 'translate(25%, -25%)'}}/>
+                <div className="flex items-center gap-3 relative">
+                  <div className="p-2 rounded-xl" style={{background: 'rgba(255,255,255,0.15)'}}>
+                    <MapPin size={15} className="text-white"/>
                   </div>
                   <div>
-                    <p className="text-[9px] text-blue-300 font-black uppercase tracking-widest">Bekat</p>
-                    <h2 className="text-sm font-black text-white uppercase">{s}</h2>
+                    <p className="text-blue-300 text-[8px] font-black uppercase tracking-widest">Bekat</p>
+                    <h3 className="text-white text-sm font-black uppercase">{s}</h3>
                   </div>
                 </div>
               </div>
 
               {/* Tugmalar */}
               <div className="grid grid-cols-2 gap-2 p-3">
-                <button onClick={() => { setSelectedStation(s); loadStationData(s); setView('dashboard'); }}
-                  className="group bg-blue-50 hover:bg-blue-900 border-2 border-blue-100 hover:border-blue-900 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
-                  <div className="text-2xl group-hover:scale-110 transition-transform">📋</div>
-                  <p className="font-black text-[9px] uppercase text-center text-blue-900 group-hover:text-white">Ish grafigi</p>
+               <button onClick={() => { setSelectedStation(s); loadStationData(s, currentWorker); setView('dashboard'); }}
+                  className="group flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer transition-all duration-300 active:scale-95"
+                  style={{background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '1px solid #bfdbfe'}}
+                  onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #1e3a8a, #3730a3)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, #eff6ff, #dbeafe)'}
+                >
+                  <span className="text-xl group-hover:scale-110 transition-transform">📋</span>
+                  <span className="text-[9px] font-black uppercase text-blue-900 group-hover:text-white transition-colors">Ish grafigi</span>
                 </button>
-
                 <button onClick={() => { setSelectedStation(s); setMenuView('fault'); }}
-                  className="group bg-red-50 hover:bg-red-600 border-2 border-red-100 hover:border-red-600 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
-                  <div className="text-2xl group-hover:scale-110 transition-transform">🚨</div>
-                  <p className="font-black text-[9px] uppercase text-center text-red-700 group-hover:text-white">Nosozlik</p>
+                  className="group flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer transition-all duration-300 active:scale-95"
+                  style={{background: 'linear-gradient(135deg, #fff1f2, #fecdd3)', border: '1px solid #fda4af'}}
+                  onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, #fff1f2, #fecdd3)'}
+                >
+                  <span className="text-xl group-hover:scale-110 transition-transform">🚨</span>
+                  <span className="text-[9px] font-black uppercase text-red-700 group-hover:text-white transition-colors">Nosozlik</span>
                 </button>
-
                 <button onClick={() => { setSelectedStation(s); setMenuView('journal'); }}
-                  className="group bg-indigo-50 hover:bg-indigo-700 border-2 border-indigo-100 hover:border-indigo-700 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
-                  <div className="text-2xl group-hover:scale-110 transition-transform">📔</div>
-                  <p className="font-black text-[9px] uppercase text-center text-indigo-700 group-hover:text-white">Jurnallar</p>
+                  className="group flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer transition-all duration-300 active:scale-95"
+                  style={{background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', border: '1px solid #c7d2fe'}}
+                  onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #4338ca, #3730a3)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, #eef2ff, #e0e7ff)'}
+                >
+                  <span className="text-xl group-hover:scale-110 transition-transform">📔</span>
+                  <span className="text-[9px] font-black uppercase text-indigo-700 group-hover:text-white transition-colors">Jurnallar</span>
                 </button>
-
                 <button onClick={() => { setSelectedStation(s); loadWorkers(); setMenuView('workers'); }}
-                  className="group bg-purple-50 hover:bg-purple-700 border-2 border-purple-100 hover:border-purple-700 p-4 rounded-2xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-200">
-                  <div className="text-2xl group-hover:scale-110 transition-transform">👥</div>
-                  <p className="font-black text-[9px] uppercase text-center text-purple-700 group-hover:text-white">Ishchilar</p>
+                  className="group flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer transition-all duration-300 active:scale-95"
+                  style={{background: 'linear-gradient(135deg, #faf5ff, #ede9fe)', border: '1px solid #ddd6fe'}}
+                  onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #7c3aed, #6d28d9)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, #faf5ff, #ede9fe)'}
+                >
+                  <span className="text-xl group-hover:scale-110 transition-transform">👥</span>
+                  <span className="text-[9px] font-black uppercase text-purple-700 group-hover:text-white transition-colors">Ishchilar</span>
                 </button>
               </div>
             </div>
@@ -986,53 +1099,145 @@ Chiqish
       </div>
 
     ) : (
-      // BITTA BEKAT
-      <div className="max-w-sm mx-auto">
+      // ═══ BITTA BEKAT — PREMIUM ═══
+      <div className="w-full max-w-sm">
 
-        {/* Salom banner */}
-        <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 rounded-3xl p-6 text-white shadow-2xl mb-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8"/>
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-8 -translate-x-8"/>
-          <div className="relative">
-            <p className="text-[10px] text-blue-300 font-black uppercase tracking-widest mb-1">Sizning bekat</p>
-            <h2 className="text-2xl font-black uppercase flex items-center gap-2">
-              <MapPin size={20}/> {currentWorker?.station}
-            </h2>
-            <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-2">
-              <div className="bg-white/20 p-1.5 rounded-lg">
-                <User size={14}/>
+        {/* HERO BANNER */}
+        <div className="relative rounded-[2rem] overflow-hidden mb-5 shadow-2xl" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 40%, #312e81 100%)'}}>
+          {/* Animated orbs */}
+          <div className="absolute top-0 right-0 w-48 h-48 rounded-full opacity-20 pointer-events-none" style={{background: 'radial-gradient(circle, #818cf8, transparent)', transform: 'translate(30%, -30%)'}}/>
+          <div className="absolute bottom-0 left-0 w-40 h-40 rounded-full opacity-15 pointer-events-none" style={{background: 'radial-gradient(circle, #60a5fa, transparent)', transform: 'translate(-30%, 30%)'}}/>
+          {/* Top shimmer line */}
+          <div className="absolute top-0 left-0 right-0 h-px" style={{background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)'}}/>
+
+          <div className="relative p-6">
+            {/* Bekat nomi */}
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-blue-400 mb-1">Sizning bekat</p>
+                <h2 className="text-2xl font-black text-white uppercase leading-tight">{currentWorker?.station}</h2>
               </div>
-              <p className="text-sm font-bold text-blue-100">{currentWorker?.full_name}</p>
+              <div className="p-3 rounded-2xl flex items-center justify-center" style={{background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)'}}>
+                <MapPin size={20} className="text-blue-300"/>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="h-px mb-4" style={{background: 'linear-gradient(90deg, rgba(255,255,255,0.2), transparent)'}}/>
+
+            {/* Ishchi info */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black text-white" style={{background: 'linear-gradient(135deg, rgba(99,102,241,0.6), rgba(59,130,246,0.6))'}}>
+                {currentWorker?.full_name?.charAt(0)}
+              </div>
+              <div>
+                <p className="text-white text-sm font-black">{currentWorker?.full_name}</p>
+                <p className="text-blue-400 text-[9px] font-bold uppercase tracking-widest">
+{currentWorker?.role === 'bekat_boshlig' ? "Bekat boshlig'i" :
+ currentWorker?.role === 'katta_elektromexanik' ? 'Katta elektromexanik' :
+ currentWorker?.role === 'elektromexanik' ? 'Elektromexanik' : 'Elektromontyor'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Tugmalar */}
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => { setSelectedStation(currentWorker.station); loadStationData(currentWorker.station); setView('dashboard'); }}
-            className="group bg-white hover:bg-blue-900 border-2 border-blue-100 hover:border-blue-900 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
-            <div className="bg-blue-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">📋</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Ish grafigi</p>
+        {/* MENYU TUGMALARI */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+
+          {/* Ish grafigi — PRIMARY */}
+          <button
+  onClick={() => { setSelectedStation(currentWorker.station); loadStationData(currentWorker.station, currentWorker); setView('dashboard'); }}
+            className="col-span-2 group relative overflow-hidden rounded-2xl p-5 cursor-pointer transition-all duration-300 active:scale-[0.98] shadow-lg"
+            style={{background: 'linear-gradient(135deg, #1e3a8a, #3730a3)', border: '1px solid rgba(99,102,241,0.3)'}}
+          >
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{background: 'linear-gradient(135deg, #1d4ed8, #4338ca)'}}/>
+            <div className="absolute top-0 right-0 w-24 h-24 opacity-10" style={{background: 'radial-gradient(circle, white, transparent)', transform: 'translate(25%, -25%)'}}/>
+            <div className="relative flex items-center gap-4">
+              <div className="p-3 rounded-2xl" style={{background: 'rgba(255,255,255,0.15)'}}>
+                <span className="text-2xl">📋</span>
+              </div>
+              <div className="text-left">
+                <p className="text-white font-black text-sm uppercase tracking-tight">Ish grafigi</p>
+                <p className="text-blue-300 text-[10px] font-bold mt-0.5">Bugungi vazifalar</p>
+              </div>
+              <div className="ml-auto opacity-60 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M4 10h12M10 4l6 6-6 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
           </button>
 
-          <button onClick={() => setMenuView('fault')}
-            className="group bg-white hover:bg-red-600 border-2 border-red-100 hover:border-red-600 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
-            <div className="bg-red-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">🚨</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Nosozlik</p>
+          {/* Nosozlik */}
+          <button
+            onClick={() => setMenuView('fault')}
+            className="group relative overflow-hidden rounded-2xl p-5 cursor-pointer transition-all duration-300 active:scale-[0.97] shadow-md"
+            style={{background: 'linear-gradient(135deg, #fff1f2, #fecdd3)', border: '1px solid #fda4af'}}
+          >
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{background: 'linear-gradient(135deg, #dc2626, #b91c1c)'}}/>
+            <div className="relative flex flex-col items-center gap-2.5">
+              <div className="p-2.5 rounded-xl transition-all" style={{background: 'rgba(220,38,38,0.1)'}}>
+                <span className="text-2xl group-hover:scale-110 inline-block transition-transform">🚨</span>
+              </div>
+              <p className="font-black text-xs uppercase tracking-tight text-red-700 group-hover:text-white transition-colors">Nosozlik</p>
+            </div>
           </button>
 
-          <button onClick={() => setMenuView('journal')}
-            className="group bg-white hover:bg-indigo-700 border-2 border-indigo-100 hover:border-indigo-700 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
-            <div className="bg-indigo-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">📔</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Jurnallar</p>
+          {/* Jurnallar */}
+          <button
+            onClick={() => setMenuView('journal')}
+            className="group relative overflow-hidden rounded-2xl p-5 cursor-pointer transition-all duration-300 active:scale-[0.97] shadow-md"
+            style={{background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', border: '1px solid #c7d2fe'}}
+          >
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{background: 'linear-gradient(135deg, #4338ca, #3730a3)'}}/>
+            <div className="relative flex flex-col items-center gap-2.5">
+              <div className="p-2.5 rounded-xl" style={{background: 'rgba(67,56,202,0.1)'}}>
+                <span className="text-2xl group-hover:scale-110 inline-block transition-transform">📔</span>
+              </div>
+              <p className="font-black text-xs uppercase tracking-tight text-indigo-700 group-hover:text-white transition-colors">Jurnallar</p>
+            </div>
           </button>
 
-          <button onClick={() => { loadWorkers(); setMenuView('workers'); }}
-            className="group bg-white hover:bg-purple-700 border-2 border-purple-100 hover:border-purple-700 p-5 rounded-3xl shadow-md flex flex-col items-center gap-3 cursor-pointer transition-all duration-200 active:scale-95">
-            <div className="bg-purple-100 group-hover:bg-white/20 p-3 rounded-2xl transition-all text-2xl group-hover:scale-110">👥</div>
-            <p className="font-black text-xs uppercase tracking-tight text-center text-slate-700 group-hover:text-white">Ishchilar</p>
+          {/* Ishchilar */}
+          <button
+            onClick={() => { loadWorkers(); setMenuView('workers'); }}
+            className="col-span-2 group relative overflow-hidden rounded-2xl p-4 cursor-pointer transition-all duration-300 active:scale-[0.98]"
+            style={{background: '#f8fafc', border: '1px solid #e2e8f0'}}
+          >
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{background: 'linear-gradient(135deg, #faf5ff, #ede9fe)'}}/>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2.5 rounded-xl" style={{background: 'rgba(124,58,237,0.08)'}}>
+                <span className="text-xl">👥</span>
+              </div>
+              <div>
+                <p className="font-black text-xs uppercase tracking-tight text-slate-700 group-hover:text-purple-800 transition-colors">Ishchilar ro'yxati</p>
+                <p className="text-[9px] text-slate-400 font-bold mt-0.5">Bekat xodimlari</p>
+              </div>
+              <div className="ml-auto text-slate-300 group-hover:text-purple-400 group-hover:translate-x-1 transition-all">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                  <path d="M4 10h12M10 4l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
           </button>
+
         </div>
+
+        {/* STATUS BAR */}
+        <div className="flex items-center justify-between px-4 py-3 rounded-2xl" style={{background: '#f8fafc', border: '1px solid #e2e8f0'}}>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"/>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"/>
+            </span>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Online</span>
+          </div>
+          <span className="text-[10px] font-bold text-slate-400">
+            {new Date().toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+          </span>
+        </div>
+
       </div>
     )}
   </div>
@@ -1042,6 +1247,7 @@ Chiqish
   <FaultPage
     station={selectedStation || currentWorker?.station}
     workerName={currentWorker?.full_name}
+    currentWorker={currentWorker}
     onBack={() => setMenuView('main')}
     supabase={supabase}
     formatFullDateTime={formatFullDateTime}
@@ -1134,6 +1340,7 @@ Chiqish
     setConfirmResolve={setConfirmResolve}
     formatFullDateTime={formatFullDateTime}
     supabase={supabase}
+    onTaskConfirmed={() => loadStationData(selectedStation, currentWorker)}
   />
 )}
 {view === 'archive' && (
@@ -1287,6 +1494,7 @@ editStation={editStation} setEditStation={setEditStation}
   setConfirmResolve={setConfirmResolve}
   setActiveFaults={setActiveFaults}
   supabase={supabase}
+    currentWorker={currentWorker}
 />
 {confirmFinishTask && (
   <FinishTaskConfirm
@@ -1297,7 +1505,8 @@ editStation={editStation} setEditStation={setEditStation}
   />
 )}
       {/* KATTA QIZIL OGOHLANTIRISH */}
-{showBigAlert && activeFaults.length > 0 && (
+{showBigAlert && activeFaults.length > 0 && 
+  (currentWorker?.role === 'boss' || currentWorker?.role === 'admin') && (currentWorker?.role === 'boss' || currentWorker?.role === 'admin') && (
   <BigAlert 
     activeFaults={activeFaults} 
     onClose={() => {

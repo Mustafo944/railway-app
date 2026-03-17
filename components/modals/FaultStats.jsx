@@ -25,7 +25,7 @@ const getDuration = (created, resolved) => {
   if (m > 0) return `${m} min ${s} s`;
   return `${s} s`;
 };
-const duration = f.resolved_at ? getDuration(f.created_at, f.resolved_at) : null;
+const duration = f.confirmed && f.resolved_at ? getDuration(f.created_at, f.resolved_at) : null;
               return (
                 <div key={f.id} className="border p-4 rounded-xl">
                   <p className="font-bold">{f.station}</p>
@@ -35,6 +35,12 @@ const duration = f.resolved_at ? getDuration(f.created_at, f.resolved_at) : null
                   {f.resolved_at && <p className="text-sm text-gray-500">Tugagan: {formatFullDateTime(f.resolved_at)}</p>}
              {duration && <p className="text-green-600 font-bold mt-1">⏱ Bartaraf etish vaqti: {duration}</p>}
                   {!f.resolved_at && <p className="text-red-600 font-bold mt-1">Aktiv (davom etmoqda)</p>}
+                  {f.resolved_at && !f.confirmed && (
+  <p className="text-amber-600 font-bold mt-1">⏳ Bekat boshlig'i tasdiqlamadi</p>
+)}
+{f.confirmed_by && (
+  <p className="text-green-700 font-bold mt-1">🛡 Tasdiqladi: {f.confirmed_by}</p>
+)}
                 </div>
               );
             })

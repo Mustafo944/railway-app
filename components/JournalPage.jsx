@@ -132,12 +132,15 @@ export default function JournalPage({ station, workerName, onBack, supabase }) {
     <div className="max-w-2xl mx-auto animate-in fade-in duration-300 pb-10">
 
       {/* HEADER */}
-      <div className="flex items-center mb-5">
-        <button onClick={onBack} className="flex items-center gap-2 font-black text-blue-900 text-xs cursor-pointer hover:underline">
-          <ArrowLeft size={16}/> Ortga
-        </button>
-        <h2 className="text-lg font-black uppercase ml-4">📔 Jurnallar — {station}</h2>
-      </div>
+<div className="flex items-center justify-between mb-5 gap-2">
+  <button onClick={onBack} className="flex items-center gap-2 font-black text-blue-900 text-xs cursor-pointer hover:underline shrink-0">
+    <ArrowLeft size={16}/> Ortga
+  </button>
+  <h2 className="text-sm font-black uppercase text-right leading-tight">
+    📔 Jurnallar<br/>
+    <span className="text-blue-900">{station}</span>
+  </h2>
+</div>
 
       <p className="text-[10px] font-black uppercase text-slate-400 mb-3">Bugungi yozuvlar</p>
 
