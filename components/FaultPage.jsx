@@ -596,7 +596,7 @@ const loadFaults = async () => {
                 </button>
                 <button onClick={() => setShowConfirm(false)}
                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3.5 rounded-2xl font-black cursor-pointer">
-                  Bekor
+                  Bekor qilish
                 </button>
               </div>
             </div>
@@ -647,7 +647,7 @@ const loadFaults = async () => {
                 </button>
                 <button onClick={() => setConfirmBoshligId(null)}
                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3.5 rounded-2xl font-black cursor-pointer">
-                  Bekor
+                  Bekor qilish
                 </button>
               </div>
             </div>

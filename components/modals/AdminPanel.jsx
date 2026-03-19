@@ -1,6 +1,6 @@
 "use client"
-import { useState } from 'react';
-import { ShieldCheck, X, Save, Edit3, Trash2, ChevronDown, ChevronUp, User, Phone, Lock, Hash, Briefcase, MapPin, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShieldCheck, X, Save, Edit3, Trash2, ChevronDown, User, Phone, Lock, Hash, MapPin, Plus } from 'lucide-react';
 
 const LAVOZIMLAR = [
   { value: 'bosh_muhandis', label: 'Bosh muhandis', emoji: '🟣' },
@@ -45,6 +45,43 @@ const InputField = ({ icon: Icon, placeholder, value, onChange, type = 'text' })
   </div>
 );
 
+// WorkerCard — AdminPanel DAN TASHQARIDA, alohida komponent
+const WorkerCard = React.memo(function WorkerCard({ w, isProtected, ROLE_LABELS, handleEditClick, removeWorker }) {
+  return (
+    <div className={`bg-white border-2 rounded-2xl p-3 sm:p-4 ${isProtected(w.role) ? 'border-orange-200 bg-orange-50' : 'border-slate-100'}`}>
+      <div className="flex justify-between items-center">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-black text-xs sm:text-sm">{w.full_name}</p>
+            {ROLE_LABELS[w.role] && (
+              <span className={`${ROLE_LABELS[w.role].color} text-white text-[7px] px-1.5 py-0.5 rounded-full font-black`}>
+                {ROLE_LABELS[w.role].label}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="font-mono text-orange-600 text-[9px]">{w.worker_id}</p>
+            {w.station && <p className="text-[8px] font-black text-purple-600">📍 {stationDisplay(w.station)}</p>}
+          </div>
+          {w.phone && <p className="text-[9px] font-bold text-green-600 mt-0.5">📞 {w.phone}</p>}
+        </div>
+        <div className="flex gap-1">
+          <button onClick={() => handleEditClick(w)} className="text-blue-600 p-2 hover:bg-blue-50 rounded-xl cursor-pointer transition">
+            <Edit3 size={15}/>
+          </button>
+          {!isProtected(w.role) ? (
+            <button onClick={() => removeWorker(w)} className="text-red-500 p-2 hover:bg-red-50 rounded-xl cursor-pointer transition">
+              <Trash2 size={15}/>
+            </button>
+          ) : (
+            <div className="p-2"><ShieldCheck size={15} className="text-orange-300"/></div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function AdminPanel({
   workersList,
   newWorkerName, setNewWorkerName,
@@ -74,15 +111,15 @@ export default function AdminPanel({
     if (isEdit) {
       const current = Array.isArray(editStation) ? editStation : (editStation ? [editStation] : []);
       if (current.includes(bekat)) setEditStation(current.filter(b => b !== bekat));
-else if (current.length < 3) setEditStation([...current, bekat]);
+      else if (current.length < 3) setEditStation([...current, bekat]);
     } else {
       const current = Array.isArray(newWorkerStation) ? newWorkerStation : (newWorkerStation ? [newWorkerStation] : []);
       if (current.includes(bekat)) setNewWorkerStation(current.filter(b => b !== bekat));
-     else if (current.length < 3) setNewWorkerStation([...current, bekat]);
+      else if (current.length < 3) setNewWorkerStation([...current, bekat]);
     }
   };
 
- const isMultiStation = (role) => ['katta_elektromexanik', 'bekat_boshlig'].includes(role);
+  const isMultiStation = (role) => ['katta_elektromexanik', 'bekat_boshlig'].includes(role);
   const isWorkerLevel = (role) => ['bekat_boshlig', 'katta_elektromexanik', 'elektromexanik', 'elektromontyor'].includes(role);
   const isProtected = (role) => ['admin', 'boss'].includes(role);
 
@@ -91,92 +128,8 @@ else if (current.length < 3) setEditStation([...current, bekat]);
     if (!w.station || TOP_ROLES.includes(w.role)) return false;
     return w.station.split(',').map(s => s.trim()).includes(station);
   });
-  const activeStations = BEKATLAR.filter(s => stationWorkers(s).length > 0);
-
+const activeStations = BEKATLAR;
   const selectedLavozim = LAVOZIMLAR.find(l => l.value === newWorkerRole);
-
-  const WorkerCard = ({ w }) => (
-    <div className={`bg-white border-2 rounded-2xl p-3 sm:p-4 ${isProtected(w.role) ? 'border-orange-200 bg-orange-50' : 'border-slate-100'}`}>
-      {editingWorker?.id === w.id ? (
-        <div className="space-y-2">
-          <InputField icon={User} placeholder="F.I.SH" value={editName} onChange={e => setEditName(e.target.value)}/>
-          {!isProtected(w.role) && (
-            <>
-              <InputField icon={Hash} placeholder="Yangi ID" value={editId} onChange={e => setEditId(e.target.value)}/>
-              <InputField icon={Lock} placeholder="Yangi parol" value={editPass} onChange={e => setEditPass(e.target.value)}/>
-              <InputField icon={Phone} placeholder="Telefon (+998...)" type="tel" value={editPhone || ''} onChange={e => setEditPhone(e.target.value)}/>
-              <select value={editRole || w.role} onChange={e => { setEditRole(e.target.value); setEditStation(''); }}
-                className="w-full p-3 border-2 rounded-2xl text-xs font-bold outline-none focus:border-orange-400 bg-white">
-                {LAVOZIMLAR.map(l => <option key={l.value} value={l.value}>{l.emoji} {l.label}</option>)}
-              </select>
-              {isWorkerLevel(editRole || w.role) && (
-                isMultiStation(editRole || w.role) ? (
-                  <div className="bg-slate-50 border-2 border-slate-100 rounded-2xl p-3 space-y-2">
-                    <p className="text-[9px] font-black text-slate-500 uppercase">Bekatlar (max 3)</p>
-                    <div className="flex flex-wrap gap-1">
-                      {BEKATLAR.map(b => {
-                        const selected = Array.isArray(editStation) ? editStation.includes(b) : editStation === b;
-                        return (
-                          <button key={b} type="button" onClick={() => toggleStationSelect(b, true)}
-                            className={`px-2 py-1 rounded-lg text-[9px] font-black cursor-pointer transition-all ${selected ? 'bg-orange-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>
-                            {b}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <select value={Array.isArray(editStation) ? editStation[0] || '' : editStation} onChange={e => setEditStation(e.target.value)}
-                    className="w-full p-3 border-2 rounded-2xl text-xs font-bold outline-none focus:border-orange-400 bg-white">
-                    <option value="">Bekat tanlang</option>
-                    {BEKATLAR.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                )
-              )}
-            </>
-          )}
-          <div className="flex gap-2">
-            <button onClick={saveEdit} className="flex-1 bg-green-600 text-white p-2.5 rounded-xl font-black text-xs cursor-pointer flex items-center justify-center gap-1 hover:bg-green-700 transition">
-              <Save size={14}/> Saqlash
-            </button>
-            <button onClick={() => setEditingWorker(null)} className="flex-1 bg-slate-100 p-2.5 rounded-xl font-black text-xs cursor-pointer hover:bg-slate-200 transition">
-              Bekor
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex justify-between items-center">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="font-black text-xs sm:text-sm">{w.full_name}</p>
-              {ROLE_LABELS[w.role] && (
-                <span className={`${ROLE_LABELS[w.role].color} text-white text-[7px] px-1.5 py-0.5 rounded-full font-black`}>
-                  {ROLE_LABELS[w.role].label}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <p className="font-mono text-orange-600 text-[9px]">{w.worker_id}</p>
-              {w.station && <p className="text-[8px] font-black text-purple-600">📍 {stationDisplay(w.station)}</p>}
-            </div>
-            {w.phone && <p className="text-[9px] font-bold text-green-600 mt-0.5">📞 {w.phone}</p>}
-          </div>
-          <div className="flex gap-1">
-            <button onClick={() => handleEditClick(w)} className="text-blue-600 p-2 hover:bg-blue-50 rounded-xl cursor-pointer transition">
-              <Edit3 size={15}/>
-            </button>
-            {!isProtected(w.role) ? (
-              <button onClick={() => removeWorker(w)} className="text-red-500 p-2 hover:bg-red-50 rounded-xl cursor-pointer transition">
-                <Trash2 size={15}/>
-              </button>
-            ) : (
-              <div className="p-2"><ShieldCheck size={15} className="text-orange-300"/></div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{backdropFilter: 'blur(8px)'}}>
@@ -185,7 +138,6 @@ else if (current.length < 3) setEditStation([...current, bekat]);
         {/* HEADER */}
         <div className="relative px-5 pt-5 pb-4 shrink-0" style={{background: 'linear-gradient(135deg, #1e3a8a, #3730a3)'}}>
           <div className="absolute top-0 right-0 w-32 h-32 opacity-10 rounded-full" style={{background: 'radial-gradient(circle, white, transparent)', transform: 'translate(30%, -30%)'}}/>
-          {/* Mobil drag indicator */}
           <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3 sm:hidden"/>
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -197,17 +149,16 @@ else if (current.length < 3) setEditStation([...current, bekat]);
                 <p className="text-blue-300 text-[10px] font-bold">{workersList.length} ta xodim</p>
               </div>
             </div>
-<button onClick={onClose} className="bg-white/15 hover:bg-white/25 p-2 rounded-xl text-white cursor-pointer transition z-10 relative">
-  <X size={20}/>
-</button>
+            <button onClick={onClose} className="bg-white/15 hover:bg-white/25 p-2 rounded-xl text-white cursor-pointer transition z-10 relative">
+              <X size={20}/>
+            </button>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
 
-          {/* YANGI ISHCHI QO'SHISH — ZAMONAVIY FORMA */}
+          {/* YANGI ISHCHI QO'SHISH */}
           <div className="rounded-3xl overflow-hidden shadow-sm border border-slate-100">
-            {/* Forma header — bosilsa ochiladi */}
             <button
               onClick={() => setFormOpen(!formOpen)}
               className="w-full flex items-center justify-between p-4 bg-white cursor-pointer hover:bg-orange-50 transition-all"
@@ -224,11 +175,8 @@ else if (current.length < 3) setEditStation([...current, bekat]);
               <ChevronDown size={18} className={`text-slate-400 transition-transform duration-300 ${formOpen ? 'rotate-180' : ''}`}/>
             </button>
 
-            {/* Forma body */}
             {formOpen && (
               <div className="p-4 bg-white border-t border-slate-50 space-y-3">
-
-                {/* Shaxsiy ma'lumotlar */}
                 <div className="space-y-2">
                   <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest px-1">👤 Shaxsiy ma'lumotlar</p>
                   <InputField icon={User} placeholder="F.I.SH (To'liq ism)" value={newWorkerName} onChange={e => setNewWorkerName(e.target.value)}/>
@@ -239,7 +187,6 @@ else if (current.length < 3) setEditStation([...current, bekat]);
                   <InputField icon={Phone} placeholder="Telefon raqami (+998...)" type="tel" value={newWorkerPhone || ''} onChange={e => setNewWorkerPhone(e.target.value)}/>
                 </div>
 
-                {/* Lavozim tanlash */}
                 <div className="space-y-2">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">💼 Lavozim</p>
                   <div className="grid grid-cols-2 gap-2">
@@ -268,11 +215,10 @@ else if (current.length < 3) setEditStation([...current, bekat]);
                   </div>
                 </div>
 
-                {/* Bekat tanlash */}
                 {isWorkerLevel(newWorkerRole) && (
                   <div className="space-y-2">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">
-                     📍 Bekat{isMultiStation(newWorkerRole) ? 'lar (max 3)' : ''}
+                      📍 Bekat{isMultiStation(newWorkerRole) ? 'lar (max 3)' : ''}
                     </p>
                     {isMultiStation(newWorkerRole) ? (
                       <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
@@ -308,7 +254,6 @@ else if (current.length < 3) setEditStation([...current, bekat]);
                   </div>
                 )}
 
-                {/* Ko'rinish preview */}
                 {(newWorkerName || newWorkerRole) && (
                   <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Ko'rinishi:</p>
@@ -336,7 +281,6 @@ else if (current.length < 3) setEditStation([...current, bekat]);
                   </div>
                 )}
 
-                {/* Qo'shish tugmasi */}
                 <button
                   onClick={addWorker}
                   className="w-full py-3.5 rounded-2xl font-black text-sm text-white cursor-pointer transition-all active:scale-[0.98] flex items-center justify-center gap-2"
@@ -348,10 +292,19 @@ else if (current.length < 3) setEditStation([...current, bekat]);
             )}
           </div>
 
-          {/* YUQORI LAVOZIMLAR */}
+          {/* RAHBARIYAT */}
           <div className="space-y-2">
             <p className="font-black text-[10px] text-slate-500 px-1 uppercase tracking-widest">🏛️ Rahbariyat ({topWorkers.length})</p>
-            {topWorkers.map(w => <WorkerCard key={w.id} w={w}/>)}
+            {topWorkers.map(w => (
+              <WorkerCard
+                key={w.id}
+                w={w}
+                isProtected={isProtected}
+                ROLE_LABELS={ROLE_LABELS}
+                handleEditClick={handleEditClick}
+                removeWorker={removeWorker}
+              />
+            ))}
           </div>
 
           {/* BEKATLAR BO'YICHA */}
@@ -377,14 +330,22 @@ else if (current.length < 3) setEditStation([...current, bekat]);
                   </button>
                   {isOpen && (
                     <div className="p-2 space-y-2 bg-slate-50 border-t border-slate-100">
-                      {workers.map(w => <WorkerCard key={w.id} w={w}/>)}
+                      {workers.map(w => (
+                        <WorkerCard
+                          key={w.id}
+                          w={w}
+                          isProtected={isProtected}
+                          ROLE_LABELS={ROLE_LABELS}
+                          handleEditClick={handleEditClick}
+                          removeWorker={removeWorker}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
               );
             })}
 
-            {/* Bekatsiz ishchilar */}
             {workersList.filter(w => !w.station && !TOP_ROLES.includes(w.role)).length > 0 && (
               <div className="rounded-2xl overflow-hidden border-2 border-orange-100">
                 <button
@@ -396,7 +357,16 @@ else if (current.length < 3) setEditStation([...current, bekat]);
                 </button>
                 {openStation === '__nostation__' && (
                   <div className="p-2 space-y-2 bg-white border-t border-orange-100">
-                    {workersList.filter(w => !w.station && !TOP_ROLES.includes(w.role)).map(w => <WorkerCard key={w.id} w={w}/>)}
+                    {workersList.filter(w => !w.station && !TOP_ROLES.includes(w.role)).map(w => (
+                      <WorkerCard
+                        key={w.id}
+                        w={w}
+                        isProtected={isProtected}
+                        ROLE_LABELS={ROLE_LABELS}
+                        handleEditClick={handleEditClick}
+                        removeWorker={removeWorker}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -404,6 +374,100 @@ else if (current.length < 3) setEditStation([...current, bekat]);
           </div>
         </div>
       </div>
+
+      {/* TAHRIRLASH MODALI — alohida, AdminPanel tashqarida render bo'ladi */}
+      {editingWorker && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4" style={{backdropFilter: 'blur(8px)'}}>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Modal header */}
+            <div className="px-5 py-4 flex justify-between items-center" style={{background: 'linear-gradient(135deg, #1e3a8a, #3730a3)'}}>
+              <div className="flex items-center gap-2">
+                <div className="bg-white/20 p-2 rounded-xl">
+                  <Edit3 size={16} className="text-white"/>
+                </div>
+                <div>
+                  <p className="font-black text-white text-sm uppercase">Tahrirlash</p>
+                  <p className="text-blue-300 text-[10px]">{editingWorker.full_name}</p>
+                </div>
+              </div>
+              <button onClick={() => setEditingWorker(null)} className="bg-white/15 hover:bg-white/25 p-2 rounded-xl text-white cursor-pointer transition">
+                <X size={18}/>
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+              <InputField icon={User} placeholder="F.I.SH" value={editName} onChange={e => setEditName(e.target.value)}/>
+
+              {!isProtected(editingWorker.role) && (
+                <>
+                  <InputField icon={Hash} placeholder="ID raqami" value={editId} onChange={e => setEditId(e.target.value)}/>
+                  <InputField icon={Lock} placeholder="Yangi parol (o'zgartirmasangiz bo'sh qoldiring)" value={editPass} onChange={e => setEditPass(e.target.value)}/>
+                  <InputField icon={Phone} placeholder="Telefon (+998...)" type="tel" value={editPhone || ''} onChange={e => setEditPhone(e.target.value)}/>
+
+                  <select
+                    value={editRole || editingWorker.role}
+                    onChange={e => { setEditRole(e.target.value); setEditStation(''); }}
+                    className="w-full p-3 border-2 rounded-2xl text-xs font-bold outline-none focus:border-orange-400 bg-white text-slate-800"
+                  >
+                    {LAVOZIMLAR.map(l => <option key={l.value} value={l.value}>{l.emoji} {l.label}</option>)}
+                  </select>
+
+                  {isWorkerLevel(editRole || editingWorker.role) && (
+                    isMultiStation(editRole || editingWorker.role) ? (
+                      <div className="bg-slate-50 border-2 border-slate-100 rounded-2xl p-3 space-y-2">
+                        <p className="text-[9px] font-black text-slate-500 uppercase">Bekatlar (max 3)</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {BEKATLAR.map(b => {
+                            const selected = Array.isArray(editStation) ? editStation.includes(b) : editStation === b;
+                            return (
+                              <button key={b} type="button" onClick={() => toggleStationSelect(b, true)}
+                                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black cursor-pointer transition-all ${
+                                  selected ? 'bg-orange-500 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-orange-300'
+                                }`}>
+                                {b}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                          <MapPin size={15}/>
+                        </div>
+                        <select
+                          value={Array.isArray(editStation) ? editStation[0] || '' : editStation}
+                          onChange={e => setEditStation(e.target.value)}
+                          className="w-full pl-10 pr-4 py-3 rounded-2xl border-2 border-slate-100 bg-white font-bold text-sm outline-none focus:border-orange-400 transition-all appearance-none text-slate-800"
+                        >
+                          <option value="">Bekat tanlang</option>
+                          {BEKATLAR.map(b => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                      </div>
+                    )
+                  )}
+                </>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={saveEdit}
+                  className="flex-1 bg-green-600 text-white p-3 rounded-2xl font-black text-sm cursor-pointer flex items-center justify-center gap-2 hover:bg-green-700 transition active:scale-95"
+                >
+                  <Save size={16}/> Saqlash
+                </button>
+                <button
+                  onClick={() => setEditingWorker(null)}
+                  className="flex-1 bg-slate-100 p-3 rounded-2xl font-black text-sm cursor-pointer hover:bg-slate-200 transition active:scale-95 text-slate-700"
+                >
+                  Bekor qilish
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

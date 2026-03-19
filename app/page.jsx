@@ -414,12 +414,13 @@ useEffect(() => {
             return curr;
           });
         }, 0);
-        setCurrentWorker(curr => {
-          if (curr?.role === 'boss' || curr?.role === 'admin') {
-            setTimeout(() => toast.success("Yangi ish qo'shildi"), 0);
-          }
-          return curr;
-        });
+setCurrentWorker(curr => {
+  if (curr?.role === 'boss' || curr?.role === 'admin' || 
+      curr?.role === 'bosh_muhandis' || curr?.role === 'boshliq_muovini') {
+    toast.success("Yangi ish qo'shildi");
+  }
+  return curr;
+});
       }
     )
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tasks' },

@@ -1,6 +1,8 @@
 "use client"
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
 
 export default function JournalPage({ station, workerName, onBack, supabase }) {
@@ -94,7 +96,48 @@ export default function JournalPage({ station, workerName, onBack, supabase }) {
       setShowShu2Archive(true);
     }
   };
+const downloadDu46PDF = (date, rows) => {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  doc.setFontSize(13);
+  doc.text(`DU-46 Jurnali — ${station}`, 14, 14);
+  doc.setFontSize(9);
+  doc.text(date ? `Sana: ${fmtDate(date)}` : 'Barcha yozuvlar', 14, 21);
+  autoTable(doc, {
+    startY: 26,
+    head: [['№','Oy/kun','Soat','Kamchilik bayoni','Xabar oy/kun','Xabar soat','Xabar usuli','Kelish oy/kun','Kelish soat','Imzo','Bartaraf oy/kun','Bartaraf soat','Bartaraf sababi']],
+    body: rows.map((r, i) => [
+      i+1, r.oy_kun, r.soat_minut, r.kamchilik,
+      r.xabar_oy_kun, r.xabar_soat, r.xabar_usul,
+      r.kelish_oy_kun, r.kelish_soat, r.worker_name,
+      r.bartaraf_oy_kun, r.bartaraf_soat, r.bartaraf_sabab
+    ]),
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontSize: 7 },
+    alternateRowStyles: { fillColor: [239, 246, 255] },
+    columnStyles: { 3: { cellWidth: 35 }, 12: { cellWidth: 35 } },
+  });
+  const name = date ? `DU46-${station}-${date}.pdf` : `DU46-${station}-barchasi.pdf`;
+  doc.save(name);
+};
 
+const downloadShu2PDF = (date, rows) => {
+  const doc = new jsPDF();
+  doc.setFontSize(13);
+  doc.text(`SHU-2 Jurnali — ${station}`, 14, 14);
+  doc.setFontSize(9);
+  doc.text(date ? `Sana: ${fmtDate(date)}` : 'Barcha yozuvlar', 14, 21);
+  autoTable(doc, {
+    startY: 26,
+    head: [['№', 'Sana', 'Bajarilgan ishlar nomi', 'Imzo']],
+    body: rows.map((r, i) => [i+1, r.sana, r.ish_nomi, r.worker_name]),
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [21, 128, 61], textColor: 255 },
+    alternateRowStyles: { fillColor: [240, 253, 244] },
+    columnStyles: { 2: { cellWidth: 120 } },
+  });
+  const name = date ? `SHU2-${station}-${date}.pdf` : `SHU2-${station}-barchasi.pdf`;
+  doc.save(name);
+};
   const saveDu46 = async () => {
     if (!du46Form.kamchilik.trim()) return toast.error("Kamchilik bayon qilinmagan!");
     setIsSaving(true);
@@ -317,7 +360,22 @@ export default function JournalPage({ station, workerName, onBack, supabase }) {
                   {du46SelectedDate ? `DU-46 — ${fmtDate(du46SelectedDate)}` : '📋 DU-46 Arxiv'}
                 </h3>
               </div>
-              <button onClick={() => { setShowDu46Archive(false); setDu46SelectedDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer"><X size={20}/></button>
+             <div className="flex items-center gap-2">
+  {du46SelectedDate ? (
+    <button
+      onClick={() => downloadDu46PDF(du46SelectedDate, du46ArchiveGrouped[du46SelectedDate])}
+      className="bg-blue-900 text-white px-3 py-1.5 rounded-xl font-black text-xs cursor-pointer flex items-center gap-1">
+      <Download size={13}/> PDF
+    </button>
+  ) : (
+    <button
+      onClick={() => downloadDu46PDF(null, Object.values(du46ArchiveGrouped).flat())}
+      className="bg-blue-900 text-white px-3 py-1.5 rounded-xl font-black text-xs cursor-pointer flex items-center gap-1">
+      <Download size={13}/> Barchasi PDF
+    </button>
+  )}
+  <button onClick={() => { setShowDu46Archive(false); setDu46SelectedDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer"><X size={20}/></button>
+</div>
             </div>
             <div className="overflow-auto flex-1 p-4">
               {!du46SelectedDate ? (
@@ -394,7 +452,22 @@ export default function JournalPage({ station, workerName, onBack, supabase }) {
                   {shu2SelectedDate ? `SHU-2 — ${fmtDate(shu2SelectedDate)}` : '📒 SHU-2 Arxiv'}
                 </h3>
               </div>
-              <button onClick={() => { setShowShu2Archive(false); setShu2SelectedDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer"><X size={20}/></button>
+              <div className="flex items-center gap-2">
+  {shu2SelectedDate ? (
+    <button
+      onClick={() => downloadShu2PDF(shu2SelectedDate, shu2ArchiveGrouped[shu2SelectedDate])}
+      className="bg-green-700 text-white px-3 py-1.5 rounded-xl font-black text-xs cursor-pointer flex items-center gap-1">
+      <Download size={13}/> PDF
+    </button>
+  ) : (
+    <button
+      onClick={() => downloadShu2PDF(null, Object.values(shu2ArchiveGrouped).flat())}
+      className="bg-green-700 text-white px-3 py-1.5 rounded-xl font-black text-xs cursor-pointer flex items-center gap-1">
+      <Download size={13}/> Barchasi PDF
+    </button>
+  )}
+  <button onClick={() => { setShowShu2Archive(false); setShu2SelectedDate(null); }} className="bg-slate-100 p-2 rounded-full cursor-pointer"><X size={20}/></button>
+</div>
             </div>
             <div className="overflow-auto flex-1 p-4">
               {!shu2SelectedDate ? (
